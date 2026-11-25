@@ -15,7 +15,8 @@ import {
   InventoryStatus,
   NewInventoryItem,
 } from '../auth/authApi';
-import { colors, fontFamilies } from '../theme';
+import { useAppTheme } from '../ThemeProvider';
+import { fontFamilies, ThemeColors } from '../theme';
 
 type Props = {
   accessToken: string;
@@ -56,6 +57,8 @@ const currency = new Intl.NumberFormat('en-PH', {
 });
 
 export function InventoryDashboard({ accessToken }: Props) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [summary, setSummary] = useState({
     stockValue: 0,
@@ -281,8 +284,8 @@ export function InventoryDashboard({ accessToken }: Props) {
             <Text style={styles.cardHint}>Incoming and outgoing movements · last 7 days</Text>
           </View>
           <View style={styles.legend}>
-            <LegendDot label="In" color={colors.burntYellow} />
-            <LegendDot label="Out" color={colors.pumpkinOrange} />
+            <LegendDot label="In" color={palette.burntYellow} />
+            <LegendDot label="Out" color={palette.pumpkinOrange} />
           </View>
         </View>
         <View style={styles.chart}>
@@ -315,7 +318,7 @@ export function InventoryDashboard({ accessToken }: Props) {
             <Text style={styles.cardTitle}>Inventory list</Text>
             <Text style={styles.cardHint}>Coffee, milk, syrups, and café supplies.</Text>
           </View>
-          {loading ? <ActivityIndicator color={colors.dirtyOrange} /> : null}
+          {loading ? <ActivityIndicator color={palette.dirtyOrange} /> : null}
         </View>
 
         <View style={styles.filters}>
@@ -323,7 +326,7 @@ export function InventoryDashboard({ accessToken }: Props) {
             accessibilityLabel="Search inventory"
             onChangeText={setSearch}
             placeholder="Search inventory..."
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={palette.muted}
             style={styles.search}
             value={search}
           />
@@ -354,7 +357,7 @@ export function InventoryDashboard({ accessToken }: Props) {
 
         {loading ? (
           <View style={styles.loading}>
-            <ActivityIndicator color={colors.dirtyOrange} />
+            <ActivityIndicator color={palette.dirtyOrange} />
             <Text style={styles.loadingText}>Loading inventory…</Text>
           </View>
         ) : filteredItems.length === 0 ? (
@@ -514,6 +517,8 @@ function MetricCard({
   icon: string;
   accent: 'dirty' | 'yellow' | 'orange' | 'ink';
 }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <View style={styles.metricCard}>
       <View style={styles.metricTop}>
@@ -529,6 +534,8 @@ function MetricCard({
 }
 
 function LegendDot({ label, color }: { label: string; color: string }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <View style={styles.legendItem}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
@@ -550,6 +557,8 @@ function TableCell({
   header?: boolean;
   strong?: boolean;
 }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <View style={[styles.cell, { width, flexGrow: width }]}>
       {unit && !header ? (
@@ -567,6 +576,8 @@ function TableCell({
 }
 
 function StatusBadge({ status }: { status: InventoryStatus }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <View
       style={[
@@ -595,6 +606,8 @@ function StatusBadge({ status }: { status: InventoryStatus }) {
 }
 
 function SmallButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <Pressable
       accessibilityRole="button"
@@ -615,6 +628,8 @@ function Button({
   onPress: () => void;
   busy?: boolean;
 }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <Pressable
       accessibilityRole="button"
@@ -640,6 +655,8 @@ function Field({
   placeholder?: string;
   keyboardType?: 'default' | 'decimal-pad';
 }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <View style={styles.modalField}>
       <Text style={styles.modalFieldLabel}>{label}</Text>
@@ -648,7 +665,7 @@ function Field({
         keyboardType={keyboardType}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={palette.muted}
         style={styles.modalInput}
         value={value}
       />
@@ -657,6 +674,8 @@ function Field({
 }
 
 function Feedback({ text, danger = false }: { text: string; danger?: boolean }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <Text accessibilityRole="alert" style={[styles.feedback, danger ? styles.feedbackDanger : null]}>
       {text}
@@ -664,12 +683,13 @@ function Feedback({ text, danger = false }: { text: string; danger?: boolean }) 
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(palette: ThemeColors) {
+  return StyleSheet.create({
   page: { gap: 18 },
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   headingCopy: { flex: 1 },
-  title: { color: colors.ink, fontSize: 24, fontFamily: fontFamilies.bold },
-  subtitle: { color: colors.muted, fontSize: 12, fontFamily: fontFamilies.regular, marginTop: 4 },
+  title: { color: palette.ink, fontSize: 24, fontFamily: fontFamilies.bold },
+  subtitle: { color: palette.muted, fontSize: 12, fontFamily: fontFamilies.regular, marginTop: 4 },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   metricCard: {
     flexGrow: 1,
@@ -678,90 +698,91 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.paper,
+    borderColor: palette.line,
+    backgroundColor: palette.paper,
   },
   metricTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  metricLabel: { color: colors.muted, fontSize: 11, fontFamily: fontFamilies.medium },
+  metricLabel: { color: palette.muted, fontSize: 11, fontFamily: fontFamilies.medium },
   metricIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  metricIcon_dirty: { backgroundColor: '#f6e8d5' },
-  metricIcon_yellow: { backgroundColor: '#fbf2cf' },
-  metricIcon_orange: { backgroundColor: '#ffede3' },
-  metricIcon_ink: { backgroundColor: colors.boneWhite },
+  metricIcon_dirty: { backgroundColor: palette.orangeSoft },
+  metricIcon_yellow: { backgroundColor: palette.yellowSoft },
+  metricIcon_orange: { backgroundColor: palette.orangeSoft },
+  metricIcon_ink: { backgroundColor: palette.boneWhite },
   metricIconText: { fontSize: 15, fontFamily: fontFamilies.bold },
-  metricText_dirty: { color: colors.dirtyOrange },
-  metricText_yellow: { color: '#927200' },
-  metricText_orange: { color: colors.pumpkinOrange },
-  metricText_ink: { color: colors.ink },
-  metricValue: { color: colors.ink, fontSize: 23, fontFamily: fontFamilies.bold, marginTop: 14 },
-  metricDetail: { color: colors.muted, fontSize: 10, fontFamily: fontFamilies.regular, marginTop: 3 },
-  analyticsCard: { padding: 19, backgroundColor: colors.paper, borderRadius: 16, borderWidth: 1, borderColor: colors.line },
+  metricText_dirty: { color: palette.dirtyOrange },
+  metricText_yellow: { color: palette.statusInText },
+  metricText_orange: { color: palette.pumpkinOrange },
+  metricText_ink: { color: palette.ink },
+  metricValue: { color: palette.ink, fontSize: 23, fontFamily: fontFamilies.bold, marginTop: 14 },
+  metricDetail: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular, marginTop: 3 },
+  analyticsCard: { padding: 19, backgroundColor: palette.paper, borderRadius: 16, borderWidth: 1, borderColor: palette.line },
   analyticsHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  cardTitle: { color: colors.ink, fontSize: 16, fontFamily: fontFamilies.semiBold },
-  cardHint: { color: colors.muted, fontSize: 10, fontFamily: fontFamilies.regular, marginTop: 4 },
+  cardTitle: { color: palette.ink, fontSize: 16, fontFamily: fontFamilies.semiBold },
+  cardHint: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular, marginTop: 4 },
   legend: { flexDirection: 'row', gap: 12 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 7, height: 7, borderRadius: 4 },
-  legendText: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.medium },
+  legendText: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium },
   chart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', minHeight: 116, marginTop: 18 },
   chartDay: { flex: 1, height: 112, alignItems: 'center', justifyContent: 'flex-end', gap: 7 },
-  barTrack: { width: 18, height: 88, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 6, backgroundColor: colors.boneWhite },
-  barIncoming: { width: '100%', backgroundColor: colors.burntYellow },
-  barOutgoing: { width: '100%', backgroundColor: colors.pumpkinOrange },
-  chartLabel: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.medium },
-  chartEmpty: { color: colors.muted, fontSize: 10, fontFamily: fontFamilies.regular, alignSelf: 'center' },
-  inventoryCard: { backgroundColor: colors.paper, borderRadius: 16, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' },
+  barTrack: { width: 18, height: 88, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 6, backgroundColor: palette.boneWhite },
+  barIncoming: { width: '100%', backgroundColor: palette.burntYellow },
+  barOutgoing: { width: '100%', backgroundColor: palette.pumpkinOrange },
+  chartLabel: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium },
+  chartEmpty: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular, alignSelf: 'center' },
+  inventoryCard: { backgroundColor: palette.paper, borderRadius: 16, borderWidth: 1, borderColor: palette.line, overflow: 'hidden' },
   listHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 19 },
   filters: { gap: 10, paddingHorizontal: 19, paddingBottom: 15 },
-  search: { height: 42, borderRadius: 10, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 13, backgroundColor: colors.paper, color: colors.ink, fontSize: 12, fontFamily: fontFamilies.regular },
+  search: { height: 42, borderRadius: 10, borderWidth: 1, borderColor: palette.line, paddingHorizontal: 13, backgroundColor: palette.paper, color: palette.ink, fontSize: 12, fontFamily: fontFamilies.regular },
   statusFilters: { gap: 7, alignItems: 'center' },
-  statusFilter: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 99, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
-  statusFilterSelected: { borderColor: colors.pumpkinOrange, backgroundColor: '#fff0e5' },
-  statusFilterText: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.medium },
-  statusFilterTextSelected: { color: colors.dirtyOrange, fontFamily: fontFamilies.semiBold },
+  statusFilter: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 99, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+  statusFilterSelected: { borderColor: palette.pumpkinOrange, backgroundColor: palette.accentSoft },
+  statusFilterText: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium },
+  statusFilterTextSelected: { color: palette.dirtyOrange, fontFamily: fontFamilies.semiBold },
   loading: { minHeight: 170, justifyContent: 'center', alignItems: 'center', gap: 9 },
-  loadingText: { color: colors.muted, fontSize: 11, fontFamily: fontFamilies.regular },
+  loadingText: { color: palette.muted, fontSize: 11, fontFamily: fontFamilies.regular },
   empty: { minHeight: 210, alignItems: 'center', justifyContent: 'center', padding: 24 },
   emptyIcon: { fontSize: 28, marginBottom: 8 },
-  emptyTitle: { color: colors.ink, fontSize: 15, fontFamily: fontFamilies.semiBold },
-  emptyHint: { maxWidth: 320, color: colors.muted, textAlign: 'center', fontSize: 11, lineHeight: 17, fontFamily: fontFamilies.regular, marginTop: 5, marginBottom: 14 },
+  emptyTitle: { color: palette.ink, fontSize: 15, fontFamily: fontFamilies.semiBold },
+  emptyHint: { maxWidth: 320, color: palette.muted, textAlign: 'center', fontSize: 11, lineHeight: 17, fontFamily: fontFamilies.regular, marginTop: 5, marginBottom: 14 },
   tableScrollContent: { flexGrow: 1 },
   table: { width: '100%', minWidth: 996, paddingHorizontal: 12 },
-  tableRow: { width: '100%', minHeight: 61, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.line },
+  tableRow: { width: '100%', minHeight: 61, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: palette.line },
   tableHeader: { minHeight: 38, borderTopWidth: 0 },
   cell: { minHeight: 58, justifyContent: 'center', paddingHorizontal: 7 },
-  tableHeaderText: { color: colors.muted, fontSize: 8, letterSpacing: 0.6, fontFamily: fontFamilies.semiBold },
-  cellText: { color: colors.ink, fontSize: 10, fontFamily: fontFamilies.regular },
-  cellStrong: { color: colors.ink, fontFamily: fontFamilies.semiBold },
-  cellUnit: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.regular },
+  tableHeaderText: { color: palette.muted, fontSize: 8, letterSpacing: 0.6, fontFamily: fontFamilies.semiBold },
+  cellText: { color: palette.ink, fontSize: 10, fontFamily: fontFamilies.regular },
+  cellStrong: { color: palette.ink, fontFamily: fontFamilies.semiBold },
+  cellUnit: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.regular },
   itemCell: { paddingLeft: 2 },
-  itemName: { color: colors.ink, fontSize: 10, fontFamily: fontFamilies.semiBold },
-  itemSub: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 4 },
+  itemName: { color: palette.ink, fontSize: 10, fontFamily: fontFamilies.semiBold },
+  itemSub: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 4 },
   statusBadge: { alignSelf: 'flex-start', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5 },
-  statusIn: { backgroundColor: '#fbf2cf' },
-  statusLow: { backgroundColor: '#ffede3' },
-  statusOut: { backgroundColor: '#fbe8e5' },
+  statusIn: { backgroundColor: palette.statusInBackground },
+  statusLow: { backgroundColor: palette.statusLowBackground },
+  statusOut: { backgroundColor: palette.statusOutBackground },
   statusText: { fontSize: 8, fontFamily: fontFamilies.semiBold },
-  statusTextIn: { color: '#927200' },
-  statusTextLow: { color: colors.dirtyOrange },
-  statusTextOut: { color: '#af4c40' },
+  statusTextIn: { color: palette.statusInText },
+  statusTextLow: { color: palette.statusLowText },
+  statusTextOut: { color: palette.statusOutText },
   actionCell: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  smallButton: { minHeight: 31, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
-  smallButtonPressed: { backgroundColor: colors.boneWhite },
-  smallButtonText: { color: colors.dirtyOrange, fontSize: 9, fontFamily: fontFamilies.semiBold },
-  primaryButton: { minHeight: 40, paddingHorizontal: 15, justifyContent: 'center', alignItems: 'center', borderRadius: 11, backgroundColor: colors.pumpkinOrange },
+  smallButton: { minHeight: 31, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+  smallButtonPressed: { backgroundColor: palette.surfaceSubtle },
+  smallButtonText: { color: palette.dirtyOrange, fontSize: 9, fontFamily: fontFamilies.semiBold },
+  primaryButton: { minHeight: 40, paddingHorizontal: 15, justifyContent: 'center', alignItems: 'center', borderRadius: 11, backgroundColor: palette.pumpkinOrange },
   primaryButtonPressed: { opacity: 0.86 },
   primaryButtonText: { color: '#fff', fontSize: 10, fontFamily: fontFamilies.semiBold },
-  modalBackdrop: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(33, 29, 26, 0.58)', padding: 16 },
+  modalBackdrop: { flex: 1, justifyContent: 'center', backgroundColor: palette.overlay, padding: 16 },
   modalScroll: { flexGrow: 1, justifyContent: 'center' },
-  modalCard: { width: '100%', maxWidth: 520, alignSelf: 'center', padding: 22, borderRadius: 20, backgroundColor: colors.paper },
-  modalTitle: { color: colors.ink, fontSize: 19, fontFamily: fontFamilies.bold },
-  modalSubtitle: { color: colors.muted, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.regular, marginTop: 4, marginBottom: 18 },
+  modalCard: { width: '100%', maxWidth: 520, alignSelf: 'center', padding: 22, borderRadius: 20, backgroundColor: palette.paper },
+  modalTitle: { color: palette.ink, fontSize: 19, fontFamily: fontFamilies.bold },
+  modalSubtitle: { color: palette.muted, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.regular, marginTop: 4, marginBottom: 18 },
   modalField: { flex: 1, marginBottom: 12 },
-  modalFieldLabel: { color: colors.ink, fontSize: 9, fontFamily: fontFamilies.semiBold, marginBottom: 6 },
-  modalInput: { minHeight: 43, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 11, color: colors.ink, backgroundColor: colors.paper, fontSize: 11, fontFamily: fontFamilies.regular },
+  modalFieldLabel: { color: palette.ink, fontSize: 9, fontFamily: fontFamilies.semiBold, marginBottom: 6 },
+  modalInput: { minHeight: 43, borderWidth: 1, borderColor: palette.line, borderRadius: 10, paddingHorizontal: 11, color: palette.ink, backgroundColor: palette.paper, fontSize: 11, fontFamily: fontFamilies.regular },
   fieldPair: { flexDirection: 'row', gap: 10 },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 8 },
-  feedback: { color: colors.dirtyOrange, fontSize: 10, fontFamily: fontFamilies.medium, marginBottom: 10 },
-  feedbackDanger: { color: colors.danger },
-});
+  feedback: { color: palette.dirtyOrange, fontSize: 10, fontFamily: fontFamilies.medium, marginBottom: 10 },
+  feedbackDanger: { color: palette.danger },
+  });
+}

@@ -8,7 +8,8 @@ import {
   View,
 } from 'react-native';
 import { authApi, User } from '../auth/authApi';
-import { colors, fontFamilies } from '../theme';
+import { useAppTheme } from '../ThemeProvider';
+import { fontFamilies, ThemeColors } from '../theme';
 
 type Props = {
   accessToken: string;
@@ -16,6 +17,8 @@ type Props = {
 };
 
 export function UserManagement({ accessToken, role }: Props) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -89,7 +92,7 @@ export function UserManagement({ accessToken, role }: Props) {
             <Text style={styles.cardTitle}>Team members</Text>
             <Text style={styles.cardSubtitle}>{users.length} account{users.length === 1 ? '' : 's'} in this workspace</Text>
           </View>
-          {loading ? <ActivityIndicator color={colors.dirtyOrange} /> : null}
+          {loading ? <ActivityIndicator color={palette.dirtyOrange} /> : null}
         </View>
 
         {error ? <Feedback text={error} danger /> : null}
@@ -170,6 +173,8 @@ function Field({
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences';
 }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -178,7 +183,7 @@ function Field({
         autoCapitalize={autoCapitalize}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={palette.muted}
         secureTextEntry={secureTextEntry}
         style={styles.input}
         value={value}
@@ -198,6 +203,8 @@ function RoleOption({
   selected: boolean;
   onPress: () => void;
 }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return (
     <Pressable
       accessibilityRole="radio"
@@ -212,43 +219,47 @@ function RoleOption({
 }
 
 function Feedback({ text, danger = false }: { text: string; danger?: boolean }) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
   return <Text accessibilityRole="alert" style={[styles.feedback, danger && styles.feedbackDanger]}>{text}</Text>;
 }
 
-const styles = StyleSheet.create({
+function createStyles(palette: ThemeColors) {
+  return StyleSheet.create({
   page: { gap: 18 },
-  title: { color: colors.ink, fontSize: 24, fontFamily: fontFamilies.bold },
-  subtitle: { color: colors.muted, fontSize: 12, fontFamily: fontFamilies.regular, marginTop: 4 },
-  card: { padding: 20, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
+  title: { color: palette.ink, fontSize: 24, fontFamily: fontFamilies.bold },
+  subtitle: { color: palette.muted, fontSize: 12, fontFamily: fontFamilies.regular, marginTop: 4 },
+  card: { padding: 20, borderRadius: 18, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  cardTitle: { color: colors.ink, fontSize: 16, fontFamily: fontFamilies.semiBold },
-  cardSubtitle: { color: colors.muted, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.regular, marginTop: 4, marginBottom: 14 },
-  userRow: { minHeight: 63, flexDirection: 'row', alignItems: 'center', gap: 11, borderTopWidth: 1, borderTopColor: colors.line },
-  avatar: { width: 35, height: 35, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fbf2cf' },
-  avatarText: { color: colors.dirtyOrange, fontSize: 13, fontFamily: fontFamilies.bold },
+  cardTitle: { color: palette.ink, fontSize: 16, fontFamily: fontFamilies.semiBold },
+  cardSubtitle: { color: palette.muted, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.regular, marginTop: 4, marginBottom: 14 },
+  userRow: { minHeight: 63, flexDirection: 'row', alignItems: 'center', gap: 11, borderTopWidth: 1, borderTopColor: palette.line },
+  avatar: { width: 35, height: 35, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.yellowSoft },
+  avatarText: { color: palette.dirtyOrange, fontSize: 13, fontFamily: fontFamilies.bold },
   userDetails: { flex: 1 },
-  userName: { color: colors.ink, fontSize: 11, fontFamily: fontFamilies.semiBold },
-  userEmail: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 3 },
-  roleBadge: { backgroundColor: '#fbf2cf', borderRadius: 99, paddingHorizontal: 9, paddingVertical: 6 },
-  superadminBadge: { backgroundColor: '#ffede3' },
-  roleText: { color: '#927200', fontSize: 8, letterSpacing: 0.4, fontFamily: fontFamilies.bold },
-  superadminText: { color: colors.dirtyOrange },
-  emptyText: { color: colors.muted, fontSize: 11, fontFamily: fontFamilies.regular, paddingVertical: 14 },
+  userName: { color: palette.ink, fontSize: 11, fontFamily: fontFamilies.semiBold },
+  userEmail: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 3 },
+  roleBadge: { backgroundColor: palette.yellowSoft, borderRadius: 99, paddingHorizontal: 9, paddingVertical: 6 },
+  superadminBadge: { backgroundColor: palette.orangeSoft },
+  roleText: { color: palette.statusInText, fontSize: 8, letterSpacing: 0.4, fontFamily: fontFamilies.bold },
+  superadminText: { color: palette.statusLowText },
+  emptyText: { color: palette.muted, fontSize: 11, fontFamily: fontFamilies.regular, paddingVertical: 14 },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
   field: { flexGrow: 1, flexBasis: 230, marginBottom: 4 },
-  label: { color: colors.ink, fontSize: 9, fontFamily: fontFamilies.semiBold, marginBottom: 6 },
-  input: { height: 43, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 11, color: colors.ink, backgroundColor: colors.paper, fontSize: 10, fontFamily: fontFamilies.regular },
+  label: { color: palette.ink, fontSize: 9, fontFamily: fontFamilies.semiBold, marginBottom: 6 },
+  input: { height: 43, borderWidth: 1, borderColor: palette.line, borderRadius: 10, paddingHorizontal: 11, color: palette.ink, backgroundColor: palette.paper, fontSize: 10, fontFamily: fontFamilies.regular },
   rolePicker: { flexDirection: 'row', gap: 10, marginTop: 8, marginBottom: 15 },
-  roleOption: { flex: 1, minHeight: 60, justifyContent: 'center', paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
-  roleOptionSelected: { borderColor: colors.pumpkinOrange, backgroundColor: '#fff0e5' },
-  roleOptionTitle: { color: colors.ink, fontSize: 10, fontFamily: fontFamilies.semiBold },
-  roleOptionDetail: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 3 },
-  submitButton: { minHeight: 43, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.pumpkinOrange },
+  roleOption: { flex: 1, minHeight: 60, justifyContent: 'center', paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+  roleOptionSelected: { borderColor: palette.pumpkinOrange, backgroundColor: palette.accentSoft },
+  roleOptionTitle: { color: palette.ink, fontSize: 10, fontFamily: fontFamilies.semiBold },
+  roleOptionDetail: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 3 },
+  submitButton: { minHeight: 43, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, borderRadius: 12, backgroundColor: palette.pumpkinOrange },
   submitPressed: { opacity: 0.86 },
   submitText: { color: '#fff', fontSize: 10, fontFamily: fontFamilies.semiBold },
-  permissionNote: { flexDirection: 'row', gap: 10, alignItems: 'center', borderRadius: 14, padding: 14, backgroundColor: '#fbf2cf' },
-  permissionIcon: { width: 22, height: 22, textAlign: 'center', textAlignVertical: 'center', overflow: 'hidden', borderRadius: 8, backgroundColor: colors.burntYellow, color: colors.ink, fontFamily: fontFamilies.bold },
-  permissionText: { flex: 1, color: colors.ink, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.medium },
-  feedback: { color: colors.dirtyOrange, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.medium, marginVertical: 6 },
-  feedbackDanger: { color: colors.danger },
-});
+  permissionNote: { flexDirection: 'row', gap: 10, alignItems: 'center', borderRadius: 14, padding: 14, backgroundColor: palette.yellowSoft },
+  permissionIcon: { width: 22, height: 22, textAlign: 'center', textAlignVertical: 'center', overflow: 'hidden', borderRadius: 8, backgroundColor: palette.burntYellow, color: '#211d1a', fontFamily: fontFamilies.bold },
+  permissionText: { flex: 1, color: palette.ink, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.medium },
+  feedback: { color: palette.dirtyOrange, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.medium, marginVertical: 6 },
+  feedbackDanger: { color: palette.danger },
+  });
+}

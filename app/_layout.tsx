@@ -8,6 +8,7 @@ import { Poppins_700Bold } from '@expo-google-fonts/poppins/700Bold';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useEffect } from 'react';
 import { AuthProvider } from '../src/auth/AuthProvider';
+import { ThemeProvider, useAppTheme } from '../src/ThemeProvider';
 import { colors } from '../src/theme';
 
 export default function RootLayout() {
@@ -33,10 +34,21 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <StatusBar style="dark" />
+    <ThemeProvider>
+      <AuthProvider>
+        <RootStack />
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
+
+function RootStack() {
+  const { mode } = useAppTheme();
+  return (
+    <>
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
-    </AuthProvider>
+    </>
   );
 }
 
