@@ -15,7 +15,7 @@ const ACCESS_TOKEN_TTL = '15m';
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PASSWORD_HASH_ROUNDS = 12;
 
-const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:8081,http://localhost:19006')
+const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:8081,http://localhost:8082,http://localhost:19006')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
