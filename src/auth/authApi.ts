@@ -8,6 +8,43 @@ export type User = {
 
 export type NewUser = Pick<User, 'name' | 'email' | 'role'> & { password: string };
 
+export type InventoryStatus = 'in-stock' | 'low-stock' | 'out-of-stock';
+
+export type InventoryItem = {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  minimumStock: number;
+  unitCost: number;
+  stockValue: number;
+  status: InventoryStatus;
+  updatedAt: string;
+};
+
+export type NewInventoryItem = Omit<
+  InventoryItem,
+  'id' | 'stockValue' | 'status' | 'updatedAt'
+>;
+
+export type InventoryOverview = {
+  items: InventoryItem[];
+  summary: {
+    stockValue: number;
+    lowStockItems: number;
+    outOfStockItems: number;
+    totalItems: number;
+    movementsToday: number;
+  };
+  dailyMovements: {
+    date: string;
+    label: string;
+    incoming: number;
+    outgoing: number;
+  }[];
+};
+
 export type AuthSession = {
   accessToken: string;
   refreshToken: string;
@@ -105,6 +142,45 @@ export const authApi = {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify(newUser),
+    });
+  },
+
+  inventory(accessToken: string) {
+    return request<InventoryOverview>('/inventory', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  },
+
+  createInventoryItem(accessToken: string, item: NewInventoryItem) {
+    return request<{ item: InventoryItem }>('/inventory', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(item),
+    });
+  },
+
+  updateInventoryItem(
+    accessToken: string,
+    itemId: string,
+    item: Partial<NewInventoryItem>,
+  ) {
+    return request<{ item: InventoryItem }>(`/inventory/${itemId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(item),
+    });
+  },
+
+  moveInventory(
+    accessToken: string,
+    itemId: string,
+    type: 'in' | 'out',
+    quantity: number,
+  ) {
+    return request<{ item: InventoryItem }>(`/inventory/${itemId}/movements`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ type, quantity }),
     });
   },
 };

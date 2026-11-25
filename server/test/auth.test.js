@@ -85,6 +85,36 @@ describe('authentication API input handling', () => {
     assert.equal(response.status, 401);
   });
 
+  it('requires authentication for inventory read, creation, and stock movement', async () => {
+    const requests = [
+      fetch(`${baseUrl}/api/inventory`),
+      fetch(`${baseUrl}/api/inventory`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Coffee beans',
+          category: 'Coffee',
+          unit: 'kg',
+          quantity: 5,
+          minimumStock: 2,
+          unitCost: 480,
+        }),
+      }),
+      fetch(`${baseUrl}/api/inventory/not-an-id`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ quantity: 3 }),
+      }),
+      fetch(`${baseUrl}/api/inventory/not-an-id/movements`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'in', quantity: 1 }),
+      }),
+    ];
+    const responses = await Promise.all(requests);
+    assert.deepEqual(responses.map((response) => response.status), [401, 401, 401, 401]);
+  });
+
   it('rejects unapproved browser origins', async () => {
     const response = await fetch(`${baseUrl}/api/health`, {
       headers: { origin: 'https://not-approved.example' },

@@ -1,6 +1,6 @@
 # StockMate
 
-StockMate is a React Native app built with Expo. It includes a secure sign-in flow, role-based user management, an Express API, and MongoDB-backed users and refresh sessions. The same client targets Android and installable desktop web (PWA).
+StockMate is a React Native app built with Expo. It includes a secure sign-in flow, role-based user management, and café inventory tracking backed by an Express API and MongoDB. The same client targets Android and installable desktop web (PWA).
 
 The interface uses the brand-board palette (bone white `#ededef`, burnt yellow `#dcad0c`, pumpkin orange `#f86f0b`, and dirty orange `#ce7505`) and Poppins. The responsive web auth screen uses locally owned shadcn-style button/input primitives and the ReactBits `BlurText` animation. Android keeps native React Native controls and the same visual palette.
 
@@ -74,4 +74,10 @@ Deploy the generated `dist/` directory to a static host over HTTPS. On supported
 - Authentication endpoints have an IP-based rate limit. Helmet security headers, explicit CORS origins, a 10 KB JSON body limit, and server-side Zod validation are enabled.
 - Provide a strong `JWT_ACCESS_SECRET`, use HTTPS in production, and keep `.env` files out of source control.
 
-This is an authentication starter, not a complete production identity platform. Add email verification, password reset, monitoring, backups, and deployment-specific proxy/rate-limit configuration before a public launch.
+## Inventory
+
+- The authenticated dashboard tracks café products, categories, units, quantity on hand, minimum stock, unit cost, and stock value in PHP.
+- Inventory status is calculated from on-hand quantity and the minimum stock level. Stock-in and stock-out actions update quantities and are recorded as dated movements.
+- The overview cards and seven-day movement chart are calculated from stored inventory and movement records. User management is available separately from the responsive sidebar.
+
+This is an inventory and authentication starter, not a complete production platform. Add email verification, password reset, monitoring, backups, and deployment-specific proxy/rate-limit configuration before a public launch.

@@ -6,8 +6,11 @@ import express from 'express';
 import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { z } from 'zod';
+import { InventoryItem } from './models/InventoryItem.js';
 import { RefreshToken } from './models/RefreshToken.js';
+import { StockMovement } from './models/StockMovement.js';
 import { User } from './models/User.js';
 
 const app = express();
@@ -33,7 +36,7 @@ app.use(
       error.status = 403;
       callback(error);
     },
-    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
@@ -71,6 +74,24 @@ const createUserSchema = z.object({
   role: z.enum(['admin', 'superadmin']),
 });
 
+const inventoryItemSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  category: z.string().trim().min(1).max(60).default('Coffee'),
+  unit: z.string().trim().min(1).max(24),
+  quantity: z.number().finite().min(0).max(1_000_000_000),
+  minimumStock: z.number().finite().min(0).max(1_000_000_000),
+  unitCost: z.number().finite().min(0).max(1_000_000_000),
+});
+
+const updateInventoryItemSchema = inventoryItemSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0);
+
+const stockMovementSchema = z.object({
+  type: z.enum(['in', 'out']),
+  quantity: z.number().finite().min(0.001).max(1_000_000_000),
+});
+
 const refreshSchema = z.object({
   refreshToken: z.string().min(40).max(200).nullable().optional(),
 });
@@ -82,6 +103,27 @@ function publicUser(user) {
     email: user.email,
     role: user.role,
     mustChangeCredentials: user.mustChangeCredentials,
+  };
+}
+
+function inventoryStatus(item) {
+  if (item.quantity <= 0) return 'out-of-stock';
+  if (item.quantity <= item.minimumStock) return 'low-stock';
+  return 'in-stock';
+}
+
+function publicInventoryItem(item) {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    unit: item.unit,
+    quantity: item.quantity,
+    minimumStock: item.minimumStock,
+    unitCost: item.unitCost,
+    stockValue: item.quantity * item.unitCost,
+    status: inventoryStatus(item),
+    updatedAt: item.updatedAt,
   };
 }
 
@@ -311,6 +353,160 @@ app.post(
       }
       throw error;
     }
+  },
+);
+
+app.get(
+  '/api/inventory',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  async (_req, res) => {
+    const [items, movements] = await Promise.all([
+      InventoryItem.find().sort({ name: 1 }),
+      StockMovement.find({
+        createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+      }).select('type quantity createdAt'),
+    ]);
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const totals = items.reduce(
+      (summary, item) => {
+        summary.stockValue += item.quantity * item.unitCost;
+        if (inventoryStatus(item) === 'low-stock') summary.lowStockItems += 1;
+        if (inventoryStatus(item) === 'out-of-stock') summary.outOfStockItems += 1;
+        return summary;
+      },
+      { stockValue: 0, lowStockItems: 0, outOfStockItems: 0 },
+    );
+
+    const dailyMovements = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(today);
+      date.setUTCDate(today.getUTCDate() - (6 - index));
+      const key = date.toISOString().slice(0, 10);
+      const dayMovements = movements.filter(
+        (movement) => movement.createdAt.toISOString().slice(0, 10) === key,
+      );
+      return {
+        date: key,
+        label: date.toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' }),
+        incoming: dayMovements.filter((movement) => movement.type === 'in').length,
+        outgoing: dayMovements.filter((movement) => movement.type === 'out').length,
+      };
+    });
+
+    res.json({
+      items: items.map(publicInventoryItem),
+      summary: {
+        ...totals,
+        totalItems: items.length,
+        movementsToday: movements.filter((movement) => movement.createdAt >= today).length,
+      },
+      dailyMovements,
+    });
+  },
+);
+
+app.post(
+  '/api/inventory',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  async (req, res) => {
+    const input = validate(inventoryItemSchema, req.body, res);
+    if (!input) return;
+    const item = await InventoryItem.create(input);
+    res.status(201).json({ item: publicInventoryItem(item) });
+  },
+);
+
+app.patch(
+  '/api/inventory/:itemId',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.itemId)) {
+      res.status(404).json({ message: 'Inventory item not found.' });
+      return;
+    }
+    const input = validate(updateInventoryItemSchema, req.body, res);
+    if (!input) return;
+    const item = await InventoryItem.findById(req.params.itemId);
+    if (!item) {
+      res.status(404).json({ message: 'Inventory item not found.' });
+      return;
+    }
+    const quantityDifference =
+      input.quantity === undefined ? 0 : input.quantity - item.quantity;
+    Object.assign(item, input);
+    await item.save();
+    if (quantityDifference !== 0) {
+      try {
+        await StockMovement.create({
+          itemId: item.id,
+          type: quantityDifference > 0 ? 'in' : 'out',
+          quantity: Math.abs(quantityDifference),
+          performedBy: req.authUserId,
+        });
+      } catch (error) {
+        item.quantity -= quantityDifference;
+        await item.save();
+        throw error;
+      }
+    }
+    res.json({ item: publicInventoryItem(item) });
+  },
+);
+
+app.post(
+  '/api/inventory/:itemId/movements',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.itemId)) {
+      res.status(404).json({ message: 'Inventory item not found.' });
+      return;
+    }
+    const input = validate(stockMovementSchema, req.body, res);
+    if (!input) return;
+
+    const update =
+      input.type === 'in'
+        ? { $inc: { quantity: input.quantity } }
+        : { $inc: { quantity: -input.quantity } };
+    const filter =
+      input.type === 'in'
+        ? { _id: req.params.itemId }
+        : { _id: req.params.itemId, quantity: { $gte: input.quantity } };
+    const item = await InventoryItem.findOneAndUpdate(filter, update, { new: true });
+    if (!item) {
+      const exists = await InventoryItem.exists({ _id: req.params.itemId });
+      res.status(exists ? 400 : 404).json({
+        message: exists ? 'There is not enough stock for that movement.' : 'Inventory item not found.',
+      });
+      return;
+    }
+
+    try {
+      await StockMovement.create({
+        itemId: item.id,
+        type: input.type,
+        quantity: input.quantity,
+        performedBy: req.authUserId,
+      });
+    } catch (error) {
+      const rollback =
+        input.type === 'in'
+          ? { $inc: { quantity: -input.quantity } }
+          : { $inc: { quantity: input.quantity } };
+      await InventoryItem.updateOne({ _id: item.id }, rollback);
+      throw error;
+    }
+
+    res.json({ item: publicInventoryItem(item) });
   },
 );
 

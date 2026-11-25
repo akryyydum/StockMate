@@ -1,73 +1,40 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
-import { authApi, User } from '../src/auth/authApi';
 import { useAuth } from '../src/auth/AuthProvider';
+import { InventoryDashboard } from '../src/components/InventoryDashboard';
+import { UserManagement } from '../src/components/UserManagement';
 import { colors, fontFamilies } from '../src/theme';
+
+type Section = 'inventory' | 'users';
 
 export default function HomeScreen() {
   const { user, accessToken, updateCredentials, logout } = useAuth();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 980;
+  const [section, setSection] = useState<Section>('inventory');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
-  const [usersLoading, setUsersLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
   const [email, setEmail] = useState(user?.email ?? '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newConfirmPassword, setNewConfirmPassword] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'superadmin'>('admin');
 
-  const loadUsers = useCallback(async () => {
-    if (!accessToken || user?.mustChangeCredentials) return;
-    setUsersLoading(true);
-    setError(null);
-    try {
-      const result = await authApi.listUsers(accessToken);
-      setUsers(result.users);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load users.');
-    } finally {
-      setUsersLoading(false);
-    }
-  }, [accessToken, user?.mustChangeCredentials]);
-
-  useEffect(() => {
-    if (!accessToken || user?.mustChangeCredentials) return;
-    let active = true;
-    authApi.listUsers(accessToken)
-      .then((result) => {
-        if (active) setUsers(result.users);
-      })
-      .catch((loadError: unknown) => {
-        if (active) {
-          setError(loadError instanceof Error ? loadError.message : 'Unable to load users.');
-        }
-      })
-      .finally(() => {
-        if (active) setUsersLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [accessToken, user?.mustChangeCredentials]);
-
-  if (!user) {
+  if (!user || !accessToken) {
     return <Redirect href="/" />;
   }
   const signedInUser = user;
@@ -86,7 +53,6 @@ export default function HomeScreen() {
 
   async function handleCredentialUpdate() {
     setError(null);
-    setNotice(null);
     if (email.trim().toLowerCase() === signedInUser.email.toLowerCase()) {
       setError('Enter a different email address to secure this account.');
       return;
@@ -106,7 +72,6 @@ export default function HomeScreen() {
       setCurrentPassword('');
       setPassword('');
       setConfirmPassword('');
-      setNotice('Your email and password have been updated.');
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'Unable to update credentials.');
     } finally {
@@ -114,248 +79,243 @@ export default function HomeScreen() {
     }
   }
 
-  async function handleCreateUser() {
-    setError(null);
-    setNotice(null);
-    if (newPassword.length < 12) {
-      setError('Use at least 12 characters for the new user password.');
-      return;
-    }
-    if (newPassword !== newConfirmPassword) {
-      setError('The new user passwords do not match.');
-      return;
-    }
-    if (!accessToken) {
-      setError('Your session has expired. Sign in again.');
-      return;
-    }
+  function navigate(nextSection: Section) {
+    setSection(nextSection);
+    setMenuOpen(false);
+  }
 
-    setBusy(true);
-    try {
-      await authApi.createUser(accessToken, {
-        name: newName.trim(),
-        email: newEmail.trim(),
-        password: newPassword,
-        role: newRole,
-      });
-      setNewName('');
-      setNewEmail('');
-      setNewPassword('');
-      setNewConfirmPassword('');
-      setNotice('User added successfully.');
-      await loadUsers();
-    } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Unable to add this user.');
-    } finally {
-      setBusy(false);
-    }
+  if (signedInUser.mustChangeCredentials) {
+    return (
+      <SafeAreaView style={styles.gatePage}>
+        <ScrollView contentContainerStyle={styles.gateScroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.gateCard}>
+            <Brand />
+            <View style={styles.gatePill}>
+              <View style={styles.gatePillDot} />
+              <Text style={styles.gatePillText}>SECURE YOUR NEW ACCOUNT</Text>
+            </View>
+            <Text style={styles.gateTitle}>Change your sign-in details.</Text>
+            <Text style={styles.gateDescription}>
+              This first-use admin account must use a new email address and password before you can
+              continue.
+            </Text>
+            <Field label="Current temporary password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry />
+            <Field label="New email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+            <Field label="New password (12+ characters)" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" />
+            <Field label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry autoCapitalize="none" />
+            {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+            <PrimaryButton title="Update email and password" busy={busy} onPress={() => void handleCredentialUpdate()} />
+            <Text style={styles.gateHint}>Changing your credentials signs out any other active sessions.</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (
-    <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.container}>
-          <View style={styles.brandRow}>
-            <Image source={require('../assets/icon.png')} style={styles.brandIcon} />
-            <View>
-              <Text style={styles.brand}>StockMate</Text>
-              <Text style={styles.tagline}>Your Inventory, Your Control.</Text>
+    <SafeAreaView style={[styles.app, !isDesktop && styles.mobileApp]}>
+      {isDesktop ? (
+        <Sidebar user={signedInUser} section={section} onNavigate={navigate} onLogout={() => void handleLogout()} busy={busy} />
+      ) : (
+        <MobileHeader user={signedInUser} onOpenMenu={() => setMenuOpen(true)} />
+      )}
+
+      <View style={styles.main}>
+        <View style={styles.topbar}>
+          <View>
+            <Text style={styles.topbarEyebrow}>STOCKMATE CAFÉ</Text>
+            <Text style={styles.topbarTitle}>
+              {section === 'inventory' ? 'Inventory overview' : 'Team access'}
+            </Text>
+          </View>
+          <View style={styles.topbarUser}>
+            <View style={styles.topbarAvatar}>
+              <Text style={styles.topbarAvatarText}>
+                {signedInUser.name.slice(0, 1).toUpperCase()}
+              </Text>
             </View>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>
-                {signedInUser.role === 'superadmin' ? 'SUPERADMIN' : 'ADMIN'}
+            <View>
+              <Text style={styles.topbarName}>{signedInUser.name}</Text>
+              <Text style={styles.topbarRole}>
+                {signedInUser.role === 'superadmin' ? 'Superadmin' : 'Admin'}
               </Text>
             </View>
           </View>
-
-          {user.mustChangeCredentials ? (
-            <View style={styles.card}>
-              <View style={styles.pill}>
-                <View style={styles.pillDot} />
-                <Text style={styles.pillText}>SECURE YOUR NEW ACCOUNT</Text>
-              </View>
-              <Text style={styles.heading}>Change your sign-in details.</Text>
-              <Text style={styles.description}>
-                This first-use admin account must use a new email address and password before you can
-                continue.
-              </Text>
-
-              <FormField
-                label="Current temporary password"
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                secureTextEntry
-              />
-              <FormField
-                label="New email address"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <FormField
-                label="New password (12+ characters)"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-              <FormField
-                label="Confirm new password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-
-              <Feedback error={error} notice={notice} />
-              <ActionButton
-                title="Update email and password"
-                busy={busy}
-                onPress={() => void handleCredentialUpdate()}
-              />
-              <Text style={styles.helperText}>
-                Your new password must be at least 12 characters. Your old sign-in sessions will be revoked.
-              </Text>
-            </View>
-          ) : (
-            <>
-              <View style={styles.card}>
-                <View style={styles.pill}>
-                  <View style={styles.pillDot} />
-                  <Text style={styles.pillText}>ACCOUNT READY</Text>
-                </View>
-                <Text style={styles.heading}>Good to have you, {signedInUser.name.split(' ')[0]}.</Text>
-                <Text style={styles.description}>
-                  Manage StockMate access for your team. Superadmins can add admins and superadmins.
-                </Text>
-                <View style={styles.accountRow}>
-                  <Text style={styles.accountLabel}>SIGNED IN AS</Text>
-                  <Text style={styles.accountEmail}>{signedInUser.email}</Text>
-                </View>
-                <Feedback error={error} notice={notice} />
-              </View>
-
-              <View style={styles.card}>
-                <View style={styles.sectionHeading}>
-                  <View>
-                    <Text style={styles.sectionTitle}>User management</Text>
-                    <Text style={styles.sectionDescription}>
-                      People with access to this StockMate workspace.
-                    </Text>
-                  </View>
-                  {usersLoading ? <ActivityIndicator color={colors.dirtyOrange} /> : null}
-                </View>
-
-                {users.map((listedUser) => (
-                  <View key={listedUser.id} style={styles.userRow}>
-                    <View style={styles.userAvatar}>
-                      <Text style={styles.userAvatarText}>
-                        {listedUser.name.slice(0, 1).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.userCopy}>
-                      <Text style={styles.userName}>{listedUser.name}</Text>
-                      <Text style={styles.userEmail}>{listedUser.email}</Text>
-                    </View>
-                    <Text style={styles.userRole}>
-                      {listedUser.role === 'superadmin' ? 'SUPERADMIN' : 'ADMIN'}
-                    </Text>
-                  </View>
-                ))}
-
-                {!usersLoading && users.length === 0 ? (
-                  <Text style={styles.helperText}>No user accounts were found.</Text>
-                ) : null}
-
-                {signedInUser.role === 'superadmin' ? (
-                  <View style={styles.createSection}>
-                    <Text style={styles.sectionTitle}>Add a user</Text>
-                    <Text style={styles.sectionDescription}>
-                      Admins can access the account but cannot add users. Only superadmins can create
-                      accounts.
-                    </Text>
-                    <FormField
-                      label="Full name"
-                      value={newName}
-                      onChangeText={setNewName}
-                      autoCapitalize="words"
-                    />
-                    <FormField
-                      label="Email address"
-                      value={newEmail}
-                      onChangeText={setNewEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
-                    <FormField
-                      label="Initial password (12+ characters)"
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                      secureTextEntry
-                      autoCapitalize="none"
-                    />
-                    <FormField
-                      label="Confirm password"
-                      value={newConfirmPassword}
-                      onChangeText={setNewConfirmPassword}
-                      secureTextEntry
-                      autoCapitalize="none"
-                    />
-                    <Text style={styles.fieldLabel}>Access level</Text>
-                    <View style={styles.rolePicker}>
-                      <RoleOption
-                        label="Admin"
-                        selected={newRole === 'admin'}
-                        onPress={() => setNewRole('admin')}
-                      />
-                      <RoleOption
-                        label="Superadmin"
-                        selected={newRole === 'superadmin'}
-                        onPress={() => setNewRole('superadmin')}
-                      />
-                    </View>
-                    <ActionButton
-                      title="Add user"
-                      busy={busy}
-                      onPress={() => void handleCreateUser()}
-                    />
-                  </View>
-                ) : (
-                  <Text style={styles.readOnlyNotice}>
-                    Your admin role is read-only for user management. Contact a superadmin to add accounts.
-                  </Text>
-                )}
-              </View>
-
-              <ActionButton title="Sign out" busy={busy} secondary onPress={() => void handleLogout()} />
-            </>
-          )}
-
-          <Text style={styles.footer}>Private by design. Your credentials stay protected.</Text>
         </View>
-      </ScrollView>
+
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          {section === 'inventory' ? (
+            <InventoryDashboard accessToken={accessToken} />
+          ) : (
+            <UserManagement accessToken={accessToken} role={signedInUser.role} />
+          )}
+          <Text style={styles.footer}>StockMate · Your Inventory, Your Control.</Text>
+        </ScrollView>
+      </View>
+
+      {!isDesktop ? (
+        <Modal
+          animationType="slide"
+          onRequestClose={() => setMenuOpen(false)}
+          transparent
+          visible={menuOpen}
+        >
+          <View style={styles.mobileMenuBackdrop}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close navigation"
+              onPress={() => setMenuOpen(false)}
+              style={styles.menuDismiss}
+            />
+            <View style={styles.mobileMenu}>
+              <Sidebar
+                user={signedInUser}
+                section={section}
+                onNavigate={navigate}
+                onLogout={() => void handleLogout()}
+                busy={busy}
+              />
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
 
-type FormFieldProps = {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'email-address';
-  autoCapitalize?: 'none' | 'words' | 'sentences';
-};
+function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <View style={[styles.brand, compact && styles.brandCompact]}>
+      <Image source={require('../assets/icon.png')} style={styles.brandIcon} />
+      <View>
+        <Text style={styles.brandName}>StockMate</Text>
+        <Text style={styles.brandTagline}>Your Inventory, Your Control.</Text>
+      </View>
+    </View>
+  );
+}
 
-function FormField({
+function MobileHeader({
+  user,
+  onOpenMenu,
+}: {
+  user: { name: string };
+  onOpenMenu: () => void;
+}) {
+  return (
+    <View style={styles.mobileHeader}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open navigation" onPress={onOpenMenu} style={styles.menuButton}>
+        <Text style={styles.menuButtonText}>☰</Text>
+      </Pressable>
+      <Brand compact />
+      <View style={styles.mobileUser}>
+        <Text style={styles.mobileUserText}>{user.name.slice(0, 1).toUpperCase()}</Text>
+      </View>
+    </View>
+  );
+}
+
+function Sidebar({
+  user,
+  section,
+  onNavigate,
+  onLogout,
+  busy,
+}: {
+  user: { name: string; email: string; role: 'admin' | 'superadmin' };
+  section: Section;
+  onNavigate: (section: Section) => void;
+  onLogout: () => void;
+  busy: boolean;
+}) {
+  return (
+    <View style={styles.sidebar}>
+      <Brand />
+      <Text style={styles.navCaption}>WORKSPACE</Text>
+      <NavButton
+        icon="▦"
+        label="Inventory"
+        selected={section === 'inventory'}
+        onPress={() => onNavigate('inventory')}
+      />
+      <NavButton
+        icon="♙"
+        label="User management"
+        selected={section === 'users'}
+        onPress={() => onNavigate('users')}
+      />
+      <View style={styles.sidebarBottom}>
+        <View style={styles.sidebarProfile}>
+          <View style={styles.profileAvatar}>
+            <Text style={styles.profileAvatarText}>{user.name.slice(0, 1).toUpperCase()}</Text>
+          </View>
+          <View style={styles.profileCopy}>
+            <Text numberOfLines={1} style={styles.profileName}>{user.name}</Text>
+            <Text style={styles.profileRole}>{user.role === 'superadmin' ? 'SUPERADMIN' : 'ADMIN'}</Text>
+          </View>
+        </View>
+        <Text numberOfLines={1} style={styles.profileEmail}>{user.email}</Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={onLogout}
+          style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutPressed]}
+        >
+          {busy ? <ActivityIndicator size="small" color={colors.dirtyOrange} /> : <Text style={styles.logoutText}>↪  Sign out</Text>}
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function NavButton({
+  icon,
+  label,
+  selected,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.navButton,
+        selected && styles.navSelected,
+        pressed && styles.navPressed,
+      ]}
+    >
+      <Text style={[styles.navIcon, selected && styles.navIconSelected]}>{icon}</Text>
+      <Text style={[styles.navText, selected && styles.navTextSelected]}>{label}</Text>
+      {selected ? <View style={styles.navIndicator} /> : null}
+    </Pressable>
+  );
+}
+
+function Field({
   label,
   value,
   onChangeText,
   secureTextEntry,
   keyboardType = 'default',
   autoCapitalize = 'sentences',
-}: FormFieldProps) {
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  secureTextEntry?: boolean;
+  keyboardType?: 'default' | 'email-address';
+  autoCapitalize?: 'none' | 'sentences';
+}) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -372,21 +332,13 @@ function FormField({
   );
 }
 
-function Feedback({ error, notice }: { error: string | null; notice: string | null }) {
-  if (error) return <Text accessibilityRole="alert" style={styles.error}>{error}</Text>;
-  if (notice) return <Text accessibilityRole="alert" style={styles.success}>{notice}</Text>;
-  return null;
-}
-
-function ActionButton({
+function PrimaryButton({
   title,
   busy,
-  secondary = false,
   onPress,
 }: {
   title: string;
   busy: boolean;
-  secondary?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -394,253 +346,85 @@ function ActionButton({
       accessibilityRole="button"
       disabled={busy}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        secondary && styles.secondaryButton,
-        pressed && !busy && styles.buttonPressed,
-        busy && styles.buttonDisabled,
-      ]}
+      style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
     >
-      {busy ? (
-        <ActivityIndicator color={secondary ? colors.ink : colors.paper} />
-      ) : (
-        <Text style={[styles.buttonText, secondary && styles.secondaryButtonText]}>{title}</Text>
-      )}
-    </Pressable>
-  );
-}
-
-function RoleOption({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.roleOption, selected && styles.roleOptionSelected]}
-    >
-      <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>{label}</Text>
+      {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{title}</Text>}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.boneWhite },
-  scrollContent: {
-    flexGrow: 1,
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-  },
-  container: {
-    width: '100%',
-    maxWidth: 700,
-    alignSelf: 'center',
-    gap: 16,
-  },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  brandIcon: { width: 43, height: 43, borderRadius: 13 },
-  brand: { color: colors.ink, fontSize: 17, fontFamily: fontFamilies.bold },
-  tagline: { color: colors.muted, fontSize: 10, fontFamily: fontFamilies.regular },
-  roleBadge: {
-    marginLeft: 'auto',
-    borderRadius: 99,
-    backgroundColor: '#fff3d4',
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-  },
-  roleBadgeText: {
-    color: colors.dirtyOrange,
-    fontSize: 9,
-    letterSpacing: 0.6,
-    fontFamily: fontFamilies.bold,
-  },
-  card: {
+  app: { flex: 1, flexDirection: 'row', backgroundColor: colors.boneWhite },
+  mobileApp: { flexDirection: 'column' },
+  sidebar: {
+    width: 248,
+    flexShrink: 0,
+    paddingHorizontal: 17,
+    paddingTop: 22,
+    paddingBottom: 15,
     backgroundColor: colors.paper,
-    borderColor: colors.line,
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 23,
-    shadowColor: colors.ink,
-    shadowOpacity: 0.05,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 2,
+    borderRightWidth: 1,
+    borderRightColor: colors.line,
   },
-  pill: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 99,
-    backgroundColor: '#fff3d4',
-  },
-  pillDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.dirtyOrange },
-  pillText: {
-    color: colors.dirtyOrange,
-    fontSize: 9,
-    letterSpacing: 0.8,
-    fontFamily: fontFamilies.bold,
-  },
-  heading: {
-    color: colors.ink,
-    fontSize: 25,
-    lineHeight: 34,
-    fontFamily: fontFamilies.bold,
-    marginTop: 16,
-  },
-  description: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 19,
-    fontFamily: fontFamilies.regular,
-    marginTop: 7,
-    marginBottom: 20,
-  },
-  accountRow: { borderTopColor: colors.line, borderTopWidth: 1, paddingTop: 16 },
-  accountLabel: {
-    color: colors.muted,
-    fontSize: 9,
-    letterSpacing: 1,
-    fontFamily: fontFamilies.semiBold,
-    marginBottom: 5,
-  },
-  accountEmail: { color: colors.ink, fontSize: 14, fontFamily: fontFamilies.medium },
-  sectionHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 12,
-  },
-  sectionTitle: { color: colors.ink, fontSize: 17, fontFamily: fontFamilies.bold },
-  sectionDescription: {
-    color: colors.muted,
-    fontSize: 11,
-    lineHeight: 17,
-    fontFamily: fontFamilies.regular,
-    marginTop: 4,
-    marginBottom: 11,
-  },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-    borderTopColor: colors.line,
-    borderTopWidth: 1,
-    paddingVertical: 12,
-  },
-  userAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff3d4',
-  },
-  userAvatarText: { color: colors.dirtyOrange, fontSize: 13, fontFamily: fontFamilies.bold },
-  userCopy: { flex: 1, minWidth: 0 },
-  userName: { color: colors.ink, fontSize: 12, fontFamily: fontFamilies.semiBold },
-  userEmail: { color: colors.muted, fontSize: 10, fontFamily: fontFamilies.regular, marginTop: 2 },
-  userRole: {
-    color: colors.dirtyOrange,
-    fontSize: 8,
-    letterSpacing: 0.4,
-    fontFamily: fontFamilies.bold,
-  },
-  createSection: {
-    borderTopColor: colors.line,
-    borderTopWidth: 1,
-    marginTop: 8,
-    paddingTop: 18,
-  },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4, marginBottom: 34 },
+  brandCompact: { marginBottom: 0 },
+  brandIcon: { width: 37, height: 37, borderRadius: 13 },
+  brandName: { color: colors.ink, fontSize: 14, fontFamily: fontFamilies.bold },
+  brandTagline: { color: colors.muted, fontSize: 8, fontFamily: fontFamilies.regular, marginTop: 1 },
+  navCaption: { color: colors.muted, fontSize: 8, letterSpacing: 1.1, fontFamily: fontFamilies.semiBold, marginBottom: 9, paddingHorizontal: 10 },
+  navButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 11, borderRadius: 10, marginBottom: 4, overflow: 'hidden' },
+  navSelected: { backgroundColor: '#fff0e5' },
+  navPressed: { opacity: 0.78 },
+  navIcon: { width: 19, textAlign: 'center', color: colors.muted, fontSize: 15 },
+  navIconSelected: { color: colors.pumpkinOrange },
+  navText: { flex: 1, color: colors.muted, fontSize: 10, fontFamily: fontFamilies.medium },
+  navTextSelected: { color: colors.dirtyOrange, fontFamily: fontFamilies.semiBold },
+  navIndicator: { width: 3, height: 24, borderRadius: 2, position: 'absolute', right: 0, backgroundColor: colors.pumpkinOrange },
+  sidebarBottom: { marginTop: 'auto', borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 15 },
+  sidebarProfile: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  profileAvatar: { width: 31, height: 31, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fbf2cf' },
+  profileAvatarText: { color: colors.dirtyOrange, fontSize: 11, fontFamily: fontFamilies.bold },
+  profileCopy: { flex: 1 },
+  profileName: { color: colors.ink, fontSize: 9, fontFamily: fontFamilies.semiBold },
+  profileRole: { color: colors.muted, fontSize: 7, letterSpacing: 0.6, fontFamily: fontFamilies.medium, marginTop: 3 },
+  profileEmail: { color: colors.muted, fontSize: 8, fontFamily: fontFamilies.regular, marginTop: 9, paddingLeft: 40 },
+  logoutButton: { minHeight: 36, justifyContent: 'center', marginTop: 10, paddingHorizontal: 10, borderRadius: 8 },
+  logoutPressed: { backgroundColor: colors.boneWhite },
+  logoutText: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.medium },
+  main: { flex: 1, minWidth: 0 },
+  topbar: { minHeight: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 26, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.paper },
+  topbarEyebrow: { color: colors.muted, fontSize: 7, letterSpacing: 1.1, fontFamily: fontFamilies.semiBold },
+  topbarTitle: { color: colors.ink, fontSize: 15, fontFamily: fontFamilies.semiBold, marginTop: 3 },
+  topbarUser: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  topbarAvatar: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fbf2cf' },
+  topbarAvatarText: { color: colors.dirtyOrange, fontSize: 11, fontFamily: fontFamilies.bold },
+  topbarName: { color: colors.ink, fontSize: 9, fontFamily: fontFamilies.semiBold },
+  topbarRole: { color: colors.muted, fontSize: 8, fontFamily: fontFamilies.regular, marginTop: 2 },
+  contentScroll: { flex: 1 },
+  content: { width: '100%', maxWidth: 1500, alignSelf: 'center', padding: 25, gap: 17 },
+  footer: { color: colors.muted, fontSize: 8, textAlign: 'center', fontFamily: fontFamilies.regular, marginTop: 2 },
+  mobileHeader: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.paper },
+  menuButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#fff0e5' },
+  menuButtonText: { color: colors.dirtyOrange, fontSize: 16 },
+  mobileUser: { width: 30, height: 30, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto', backgroundColor: '#fbf2cf' },
+  mobileUserText: { color: colors.dirtyOrange, fontSize: 10, fontFamily: fontFamilies.bold },
+  mobileMenuBackdrop: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(33, 29, 26, 0.36)' },
+  menuDismiss: { flex: 1 },
+  mobileMenu: { width: 260, maxWidth: '84%', backgroundColor: colors.paper },
+  gatePage: { flex: 1, backgroundColor: colors.boneWhite },
+  gateScroll: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  gateCard: { width: '100%', maxWidth: 500, alignSelf: 'center', padding: 25, borderWidth: 1, borderColor: colors.line, borderRadius: 22, backgroundColor: colors.paper },
+  gatePill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 99, backgroundColor: '#fbf2cf' },
+  gatePillDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.dirtyOrange },
+  gatePillText: { color: colors.dirtyOrange, fontSize: 9, letterSpacing: 0.8, fontFamily: fontFamilies.bold },
+  gateTitle: { color: colors.ink, fontSize: 23, fontFamily: fontFamilies.bold, marginTop: 15 },
+  gateDescription: { color: colors.muted, fontSize: 11, lineHeight: 18, fontFamily: fontFamilies.regular, marginTop: 6, marginBottom: 16 },
   field: { marginBottom: 12 },
-  fieldLabel: {
-    color: colors.ink,
-    fontSize: 10,
-    fontFamily: fontFamilies.semiBold,
-    marginBottom: 6,
-  },
-  input: {
-    minHeight: 45,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    color: colors.ink,
-    fontSize: 12,
-    fontFamily: fontFamilies.regular,
-  },
-  rolePicker: { flexDirection: 'row', gap: 9, marginBottom: 15 },
-  roleOption: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleOptionSelected: { backgroundColor: '#fff3d4', borderColor: colors.dirtyOrange },
-  roleOptionText: { color: colors.muted, fontSize: 11, fontFamily: fontFamilies.medium },
-  roleOptionTextSelected: { color: colors.dirtyOrange, fontFamily: fontFamilies.bold },
-  button: {
-    minHeight: 48,
-    borderRadius: 11,
-    backgroundColor: colors.pumpkinOrange,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  secondaryButton: { backgroundColor: colors.paper, borderColor: colors.line, borderWidth: 1 },
-  buttonPressed: { opacity: 0.86 },
-  buttonDisabled: { opacity: 0.7 },
-  buttonText: { color: colors.ink, fontSize: 12, fontFamily: fontFamilies.bold },
-  secondaryButtonText: { color: colors.ink },
-  error: {
-    color: colors.danger,
-    fontSize: 11,
-    lineHeight: 17,
-    fontFamily: fontFamilies.medium,
-    marginBottom: 10,
-  },
-  success: {
-    color: '#286744',
-    fontSize: 11,
-    lineHeight: 17,
-    fontFamily: fontFamilies.medium,
-    marginBottom: 10,
-  },
-  helperText: {
-    color: colors.muted,
-    fontSize: 10,
-    lineHeight: 16,
-    fontFamily: fontFamilies.regular,
-    marginTop: 11,
-  },
-  readOnlyNotice: {
-    color: colors.muted,
-    fontSize: 10,
-    lineHeight: 16,
-    fontFamily: fontFamilies.medium,
-    paddingTop: 13,
-    borderTopColor: colors.line,
-    borderTopWidth: 1,
-  },
-  footer: {
-    color: colors.muted,
-    textAlign: 'center',
-    fontSize: 9,
-    fontFamily: fontFamilies.regular,
-    marginTop: 3,
-  },
+  fieldLabel: { color: colors.ink, fontSize: 9, fontFamily: fontFamilies.semiBold, marginBottom: 6 },
+  input: { height: 44, paddingHorizontal: 11, borderWidth: 1, borderColor: colors.line, borderRadius: 10, backgroundColor: colors.paper, color: colors.ink, fontSize: 10, fontFamily: fontFamilies.regular },
+  error: { color: colors.danger, fontSize: 10, fontFamily: fontFamilies.medium, marginBottom: 10 },
+  primaryButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: colors.pumpkinOrange },
+  primaryButtonPressed: { opacity: 0.85 },
+  primaryButtonText: { color: '#fff', fontSize: 10, fontFamily: fontFamilies.semiBold },
+  gateHint: { color: colors.muted, fontSize: 9, lineHeight: 15, fontFamily: fontFamilies.regular, marginTop: 12 },
 });
