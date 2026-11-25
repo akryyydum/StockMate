@@ -371,7 +371,11 @@ export function InventoryDashboard({ accessToken }: Props) {
             {items.length === 0 ? <Button label="+  Add your first item" onPress={openCreateItem} /> : null}
           </View>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator
+            contentContainerStyle={styles.tableScrollContent}
+          >
             <View style={styles.table}>
               <View style={[styles.tableRow, styles.tableHeader]}>
                 <TableCell label="ITEM" width={210} header />
@@ -384,18 +388,18 @@ export function InventoryDashboard({ accessToken }: Props) {
               </View>
               {filteredItems.map((item) => (
                 <View key={item.id} style={styles.tableRow}>
-                  <View style={[styles.cell, styles.itemCell, { width: 210 }]}>
+                  <View style={[styles.cell, styles.itemCell, { width: 210, flexGrow: 210 }]}>
                     <Text numberOfLines={1} style={styles.itemName}>{item.name}</Text>
                     <Text numberOfLines={1} style={styles.itemSub}>{item.category} · {item.unit}</Text>
                   </View>
-                  <TableCell label={`${formatQuantity(item.quantity)} ${item.unit}`} width={110} strong />
-                  <TableCell label={`${formatQuantity(item.minimumStock)} ${item.unit}`} width={112} />
+                  <TableCell label={formatQuantity(item.quantity)} unit={item.unit} width={110} strong />
+                  <TableCell label={formatQuantity(item.minimumStock)} unit={item.unit} width={112} />
                   <TableCell label={currency.format(item.unitCost)} width={112} />
                   <TableCell label={currency.format(item.stockValue)} width={124} />
-                  <View style={[styles.cell, { width: 112 }]}>
+                  <View style={[styles.cell, { width: 112, flexGrow: 112 }]}>
                     <StatusBadge status={item.status} />
                   </View>
-                  <View style={[styles.cell, styles.actionCell, { width: 216 }]}>
+                  <View style={[styles.cell, styles.actionCell, { width: 216, flexGrow: 216 }]}>
                     <SmallButton label="+ In" onPress={() => openMovement(item, 'in', setMovement, setMovementQuantity, setError)} />
                     <SmallButton label="− Out" onPress={() => openMovement(item, 'out', setMovement, setMovementQuantity, setError)} />
                     <SmallButton label="Edit" onPress={() => openEditItem(item)} />
@@ -535,20 +539,29 @@ function LegendDot({ label, color }: { label: string; color: string }) {
 
 function TableCell({
   label,
+  unit,
   width,
   header = false,
   strong = false,
 }: {
   label: string;
+  unit?: string;
   width: number;
   header?: boolean;
   strong?: boolean;
 }) {
   return (
-    <View style={[styles.cell, { width }]}>
-      <Text style={[header ? styles.tableHeaderText : styles.cellText, strong && styles.cellStrong]}>
-        {label}
-      </Text>
+    <View style={[styles.cell, { width, flexGrow: width }]}>
+      {unit && !header ? (
+        <Text style={styles.cellText}>
+          <Text style={strong && styles.cellStrong}>{label}</Text>
+          <Text style={styles.cellUnit}> {unit}</Text>
+        </Text>
+      ) : (
+        <Text style={[header ? styles.tableHeaderText : styles.cellText, strong && styles.cellStrong]}>
+          {label}
+        </Text>
+      )}
     </View>
   );
 }
@@ -712,13 +725,15 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 28, marginBottom: 8 },
   emptyTitle: { color: colors.ink, fontSize: 15, fontFamily: fontFamilies.semiBold },
   emptyHint: { maxWidth: 320, color: colors.muted, textAlign: 'center', fontSize: 11, lineHeight: 17, fontFamily: fontFamilies.regular, marginTop: 5, marginBottom: 14 },
-  table: { minWidth: 996, paddingHorizontal: 12 },
-  tableRow: { minHeight: 61, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.line },
+  tableScrollContent: { flexGrow: 1 },
+  table: { width: '100%', minWidth: 996, paddingHorizontal: 12 },
+  tableRow: { width: '100%', minHeight: 61, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.line },
   tableHeader: { minHeight: 38, borderTopWidth: 0 },
   cell: { minHeight: 58, justifyContent: 'center', paddingHorizontal: 7 },
   tableHeaderText: { color: colors.muted, fontSize: 8, letterSpacing: 0.6, fontFamily: fontFamilies.semiBold },
   cellText: { color: colors.ink, fontSize: 10, fontFamily: fontFamilies.regular },
   cellStrong: { color: colors.ink, fontFamily: fontFamilies.semiBold },
+  cellUnit: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.regular },
   itemCell: { paddingLeft: 2 },
   itemName: { color: colors.ink, fontSize: 10, fontFamily: fontFamilies.semiBold },
   itemSub: { color: colors.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 4 },
@@ -730,7 +745,7 @@ const styles = StyleSheet.create({
   statusTextIn: { color: '#927200' },
   statusTextLow: { color: colors.dirtyOrange },
   statusTextOut: { color: '#af4c40' },
-  actionCell: { flexDirection: 'row', gap: 5 },
+  actionCell: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   smallButton: { minHeight: 31, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
   smallButtonPressed: { backgroundColor: colors.boneWhite },
   smallButtonText: { color: colors.dirtyOrange, fontSize: 9, fontFamily: fontFamilies.semiBold },
