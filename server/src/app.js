@@ -33,7 +33,7 @@ app.use(
       error.status = 403;
       callback(error);
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
@@ -53,15 +53,22 @@ const passwordSchema = z.string().min(12).max(128).refine(
   'Password must be no more than 72 UTF-8 bytes.',
 );
 
-const registerSchema = z.object({
-  name: z.string().trim().min(2).max(60),
+const loginSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1).max(128),
+});
+
+const credentialsSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
   email: emailSchema,
   password: passwordSchema,
 });
 
-const loginSchema = z.object({
+const createUserSchema = z.object({
+  name: z.string().trim().min(2).max(60),
   email: emailSchema,
-  password: z.string().min(1).max(128),
+  password: passwordSchema,
+  role: z.enum(['admin', 'superadmin']),
 });
 
 const refreshSchema = z.object({
@@ -73,6 +80,8 @@ function publicUser(user) {
     id: user.id,
     name: user.name,
     email: user.email,
+    role: user.role,
+    mustChangeCredentials: user.mustChangeCredentials,
   };
 }
 
@@ -142,29 +151,38 @@ function requireAccessToken(req, res, next) {
   }
 }
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
-
-app.post('/api/auth/register', authRateLimit, async (req, res) => {
-  const input = validate(registerSchema, req.body, res);
-  if (!input) return;
-
-  const passwordHash = await bcrypt.hash(input.password, PASSWORD_HASH_ROUNDS);
+async function requireCurrentUser(req, res, next) {
   try {
-    const user = await User.create({
-      name: input.name,
-      email: input.email,
-      passwordHash,
-    });
-    res.status(201).json(await createSession(user));
-  } catch (error) {
-    if (error?.code === 11000) {
-      res.status(409).json({ message: 'An account with that email already exists.' });
+    const user = await User.findById(req.authUserId);
+    if (!user) {
+      res.status(401).json({ message: 'Authentication required.' });
       return;
     }
-    throw error;
+    req.authUser = user;
+    next();
+  } catch (error) {
+    next(error);
   }
+}
+
+function requireUpdatedCredentials(req, res, next) {
+  if (req.authUser.mustChangeCredentials) {
+    res.status(403).json({ message: 'Update your email and password before continuing.' });
+    return;
+  }
+  next();
+}
+
+function requireSuperadmin(req, res, next) {
+  if (req.authUser.role !== 'superadmin') {
+    res.status(403).json({ message: 'Superadmin access is required.' });
+    return;
+  }
+  next();
+}
+
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
 app.post('/api/auth/login', authRateLimit, async (req, res) => {
@@ -222,6 +240,79 @@ app.get('/api/auth/me', requireAccessToken, async (req, res) => {
   }
   res.json({ user: publicUser(user) });
 });
+
+app.put('/api/auth/credentials', requireAccessToken, requireCurrentUser, async (req, res) => {
+  const input = validate(credentialsSchema, req.body, res);
+  if (!input) return;
+
+  const user = await User.findById(req.authUserId).select('+passwordHash');
+  if (!user || !(await bcrypt.compare(input.currentPassword, user.passwordHash))) {
+    res.status(401).json({ message: 'Current password is incorrect.' });
+    return;
+  }
+  if (
+    user.mustChangeCredentials &&
+    (input.email === user.email || (await bcrypt.compare(input.password, user.passwordHash)))
+  ) {
+    res.status(400).json({ message: 'Choose a new email address and a different password.' });
+    return;
+  }
+
+  user.email = input.email;
+  user.passwordHash = await bcrypt.hash(input.password, PASSWORD_HASH_ROUNDS);
+  user.mustChangeCredentials = false;
+  try {
+    await user.save();
+  } catch (error) {
+    if (error?.code === 11000) {
+      res.status(409).json({ message: 'An account with that email already exists.' });
+      return;
+    }
+    throw error;
+  }
+
+  await RefreshToken.deleteMany({ userId: user.id });
+  res.json(await createSession(user));
+});
+
+app.get(
+  '/api/users',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  async (_req, res) => {
+    const users = await User.find()
+      .select('name email role mustChangeCredentials')
+      .sort({ createdAt: 1 });
+    res.json({ users: users.map(publicUser) });
+  },
+);
+
+app.post(
+  '/api/users',
+  authRateLimit,
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  requireSuperadmin,
+  async (req, res) => {
+    const input = validate(createUserSchema, req.body, res);
+    if (!input) return;
+
+    const { password, ...userInput } = input;
+    const passwordHash = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
+    try {
+      const user = await User.create({ ...userInput, passwordHash });
+      res.status(201).json({ user: publicUser(user) });
+    } catch (error) {
+      if (error?.code === 11000) {
+        res.status(409).json({ message: 'An account with that email already exists.' });
+        return;
+      }
+      throw error;
+    }
+  },
+);
 
 app.use((error, _req, res, _next) => {
   if (res.headersSent) return;

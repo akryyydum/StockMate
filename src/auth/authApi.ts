@@ -2,7 +2,11 @@ export type User = {
   id: string;
   name: string;
   email: string;
+  role: 'admin' | 'superadmin';
+  mustChangeCredentials: boolean;
 };
+
+export type NewUser = Pick<User, 'name' | 'email' | 'role'> & { password: string };
 
 export type AuthSession = {
   accessToken: string;
@@ -56,13 +60,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const authApi = {
-  register(name: string, email: string, password: string) {
-    return request<AuthSession>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ name, email, password }),
-    });
-  },
-
   login(email: string, password: string) {
     return request<AuthSession>('/auth/login', {
       method: 'POST',
@@ -81,6 +78,33 @@ export const authApi = {
     return request<void>('/auth/logout', {
       method: 'POST',
       body: JSON.stringify({ refreshToken }),
+    });
+  },
+
+  updateCredentials(
+    accessToken: string,
+    currentPassword: string,
+    email: string,
+    password: string,
+  ) {
+    return request<AuthSession>('/auth/credentials', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ currentPassword, email, password }),
+    });
+  },
+
+  listUsers(accessToken: string) {
+    return request<{ users: User[] }>('/users', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  },
+
+  createUser(accessToken: string, newUser: NewUser) {
+    return request<{ user: User }>('/users', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(newUser),
     });
   },
 };

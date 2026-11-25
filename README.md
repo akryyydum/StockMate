@@ -1,6 +1,6 @@
 # StockMate
 
-StockMate is a React Native app built with Expo. It includes a login/register flow, a protected account screen, an Express API, and MongoDB-backed users and refresh sessions. The same client targets Android and installable desktop web (PWA).
+StockMate is a React Native app built with Expo. It includes a secure sign-in flow, role-based user management, an Express API, and MongoDB-backed users and refresh sessions. The same client targets Android and installable desktop web (PWA).
 
 The interface uses the brand-board palette (bone white `#ededef`, burnt yellow `#dcad0c`, pumpkin orange `#f86f0b`, and dirty orange `#ce7505`) and Poppins. The responsive web auth screen uses locally owned shadcn-style button/input primitives and the ReactBits `BlurText` animation. Android keeps native React Native controls and the same visual palette.
 
@@ -30,6 +30,8 @@ The interface uses the brand-board palette (bone white `#ededef`, burnt yellow `
    npm install --prefix server
    npm run api:dev
    ```
+
+   If the database has no superadmin, startup creates one with a random email and password and prints them once in the API terminal. Sign in with those credentials and change both immediately. Restrict access to production server logs because they contain this one-time bootstrap password.
 
 4. In a separate terminal, copy `.env.example` to `.env`. Set `EXPO_PUBLIC_API_URL` to the reachable API base URL, then start the app:
 
@@ -64,7 +66,9 @@ Deploy the generated `dist/` directory to a static host over HTTPS. On supported
 
 ## Authentication and security
 
-- Registration passwords are validated on both client and API; the API hashes passwords with bcrypt and never returns password hashes.
+- Public registration is disabled. A first-use superadmin is bootstrapped only if the database has no superadmin; only superadmins can create admin or superadmin accounts. Admins can view the user list but cannot create accounts. Authorization is enforced by the API.
+- The generated superadmin must change both its email address and password before using user management. Changing these credentials revokes all refresh sessions for that account.
+- Passwords are validated by the API, hashed with bcrypt, and password hashes are never returned.
 - Access JWTs expire after 15 minutes. Random 30-day refresh tokens are stored as SHA-256 hashes in MongoDB, rotated on refresh, and removed on logout. MongoDB expires old refresh-token records with a TTL index.
 - On Android, the refresh token is stored using Expo SecureStore (Android Keystore-backed). On web, tokens stay in memory and are not persisted across a page reload.
 - Authentication endpoints have an IP-based rate limit. Helmet security headers, explicit CORS origins, a 10 KB JSON body limit, and server-side Zod validation are enabled.

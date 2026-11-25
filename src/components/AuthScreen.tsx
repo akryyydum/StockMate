@@ -53,33 +53,15 @@ export function AuthScreen() {
 
           <View style={styles.card}>
             <View style={styles.intro}>
-              <Text style={styles.eyebrow}>{form.isRegister ? 'GET STARTED' : 'WELCOME BACK'}</Text>
-              <Text style={styles.heading}>
-                {form.isRegister ? 'Create your account' : 'Good to see you.'}
-              </Text>
-              <Text style={styles.description}>
-                {form.isRegister
-                  ? 'Set up your secure StockMate account.'
-                  : 'Sign in to pick up right where you left off.'}
-              </Text>
+              <Text style={styles.eyebrow}>WELCOME BACK</Text>
+              <Text style={styles.heading}>Good to see you.</Text>
+              <Text style={styles.description}>Sign in to pick up right where you left off.</Text>
             </View>
 
             {form.startupError ? (
               <View accessibilityRole="alert" style={styles.notice}>
                 <Text style={styles.noticeText}>{form.startupError}</Text>
               </View>
-            ) : null}
-
-            {form.isRegister ? (
-              <Field
-                label="Full name"
-                value={form.name}
-                onChangeText={form.setName}
-                placeholder="Jordan Lee"
-                autoComplete="name"
-                textContentType="name"
-                accessibilityLabel="Full name"
-              />
             ) : null}
 
             <Field
@@ -98,26 +80,13 @@ export function AuthScreen() {
               label="Password"
               value={form.password}
               onChangeText={form.setPassword}
-              placeholder={form.isRegister ? 'At least 12 characters' : 'Enter your password'}
+              placeholder="Enter your password"
               secureTextEntry={!form.showPassword}
               autoCapitalize="none"
-              autoComplete={form.isRegister ? 'new-password' : 'current-password'}
-              textContentType={form.isRegister ? 'newPassword' : 'password'}
+              autoComplete="current-password"
+              textContentType="password"
               accessibilityLabel="Password"
             />
-
-            {form.isRegister ? (
-              <Field
-                label="Confirm password"
-                value={form.confirmPassword}
-                onChangeText={form.setConfirmPassword}
-                placeholder="Enter your password again"
-                secureTextEntry={!form.showPassword}
-                autoCapitalize="none"
-                autoComplete="new-password"
-                accessibilityLabel="Confirm password"
-              />
-            ) : null}
 
             <Pressable
               accessibilityRole="checkbox"
@@ -150,25 +119,9 @@ export function AuthScreen() {
               {form.busy ? (
                 <ActivityIndicator color={colors.paper} />
               ) : (
-                <Text style={styles.submitText}>
-                  {form.isRegister ? 'Create account' : 'Sign in to StockMate'}
-                </Text>
+                <Text style={styles.submitText}>Sign in to StockMate</Text>
               )}
             </Pressable>
-
-            <View style={styles.switchRow}>
-              <Text style={styles.switchPrompt}>
-                {form.isRegister ? 'Already have an account? ' : 'New to StockMate? '}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => form.changeMode(form.isRegister ? 'login' : 'register')}
-              >
-                <Text style={styles.switchAction}>
-                  {form.isRegister ? 'Sign in' : 'Create account'}
-                </Text>
-              </Pressable>
-            </View>
           </View>
 
           <Text style={styles.securityText}>
@@ -189,8 +142,8 @@ type FieldProps = {
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address';
   autoCapitalize?: 'none' | 'sentences';
-  autoComplete?: 'name' | 'email' | 'new-password' | 'current-password';
-  textContentType?: 'name' | 'emailAddress' | 'newPassword' | 'password';
+  autoComplete?: 'email' | 'current-password';
+  textContentType?: 'emailAddress' | 'password';
 };
 
 function Field({
@@ -346,9 +299,6 @@ const styles = StyleSheet.create({
   submitPressed: { opacity: 0.86 },
   submitDisabled: { opacity: 0.7 },
   submitText: { color: colors.ink, fontSize: 13, fontFamily: fontFamilies.bold },
-  switchRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', marginTop: 17 },
-  switchPrompt: { color: colors.muted, fontSize: 11, fontFamily: fontFamilies.regular },
-  switchAction: { color: colors.dirtyOrange, fontSize: 11, fontFamily: fontFamilies.bold },
   securityText: {
     color: colors.muted,
     textAlign: 'center',

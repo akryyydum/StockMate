@@ -444,38 +444,6 @@
   line-height: 1.8;
 }
 
-.auth-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin: 27px 0 23px;
-  padding: 4px;
-  border: 1px solid #eee9e2;
-  border-radius: 12px;
-  background: #f7f5f1;
-}
-
-.auth-tab {
-  min-height: 39px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: #77716b;
-  cursor: pointer;
-  font-family: var(--sm-font-medium);
-  font-size: 10px;
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
-}
-
-.auth-tab-active {
-  background: var(--sm-paper);
-  color: var(--sm-ink);
-  box-shadow: 0 1px 4px rgba(39, 31, 22, 0.1);
-  font-family: var(--sm-font-semibold);
-}
-
-.auth-tab:focus-visible,
 .ui-button:focus-visible,
 .password-toggle:focus-visible {
   outline: 3px solid rgba(248, 111, 11, 0.3);
@@ -502,12 +470,6 @@
 .label-line {
   justify-content: space-between;
   gap: 10px;
-}
-
-.field-hint {
-  color: #9a9289;
-  font-family: var(--sm-font-medium);
-  font-size: 9px;
 }
 
 .input-wrap {
@@ -940,10 +902,6 @@
   .form-content h2 {
     margin-top: 17px;
     font-size: 29px;
-  }
-
-  .auth-tabs {
-    margin: 21px 0;
   }
 
   .auth-form {

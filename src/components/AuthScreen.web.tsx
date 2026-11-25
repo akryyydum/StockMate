@@ -113,7 +113,7 @@ export function AuthScreen() {
           </div>
         </section>
 
-        <section className="form-panel" aria-label={form.isRegister ? 'Create account' : 'Sign in'}>
+        <section className="form-panel" aria-label="Sign in">
           <div className="mobile-wordmark">
             <StockMateMark />
             <span className="wordmark-copy">
@@ -123,58 +123,18 @@ export function AuthScreen() {
           </div>
           <div className="form-content">
             <div className="form-topline">
-              <span className="form-kicker">{form.isRegister ? 'A GOOD PLACE TO START' : 'WELCOME BACK'}</span>
+              <span className="form-kicker">WELCOME BACK</span>
               <span className="secure-label"><span aria-hidden="true">✦</span> SECURE ACCESS</span>
             </div>
 
-            <h2>{form.isRegister ? 'Make it official.' : 'Good to see you.'}</h2>
-            <p className="form-intro">
-              {form.isRegister
-                ? 'Create your account and bring everything into focus.'
-                : 'Sign in and get back to what you do best.'}
-            </p>
-
-            <div className="auth-tabs" role="group" aria-label="Account action">
-              <button
-                type="button"
-                aria-pressed={!form.isRegister}
-                className={!form.isRegister ? 'auth-tab auth-tab-active' : 'auth-tab'}
-                onClick={() => form.changeMode('login')}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                aria-pressed={form.isRegister}
-                className={form.isRegister ? 'auth-tab auth-tab-active' : 'auth-tab'}
-                onClick={() => form.changeMode('register')}
-              >
-                Create account
-              </button>
-            </div>
+            <h2>Good to see you.</h2>
+            <p className="form-intro">Sign in and get back to what you do best.</p>
 
             {form.startupError ? (
               <div className="form-notice" role="alert">{form.startupError}</div>
             ) : null}
 
             <form className="auth-form" onSubmit={handleSubmit}>
-              {form.isRegister ? (
-                <div className="field-group">
-                  <label htmlFor="full-name">Full name</label>
-                  <Input
-                    id="full-name"
-                    type="text"
-                    value={form.name}
-                    onChange={(event) => form.setName(event.target.value)}
-                    placeholder="Jordan Lee"
-                    autoComplete="name"
-                    minLength={2}
-                    maxLength={60}
-                    required
-                  />
-                </div>
-              ) : null}
-
               <div className="field-group">
                 <label htmlFor="email">Email address</label>
                 <div className="input-wrap">
@@ -200,7 +160,6 @@ export function AuthScreen() {
               <div className="field-group">
                 <div className="label-line">
                   <label htmlFor="password">Password</label>
-                  {form.isRegister ? <span className="field-hint">12+ characters</span> : null}
                 </div>
                 <div className="input-wrap">
                   <span className="field-icon" aria-hidden="true">
@@ -215,10 +174,9 @@ export function AuthScreen() {
                     type={form.showPassword ? 'text' : 'password'}
                     value={form.password}
                     onChange={(event) => form.setPassword(event.target.value)}
-                    placeholder={form.isRegister ? 'Create a strong password' : 'Enter your password'}
-                    autoComplete={form.isRegister ? 'new-password' : 'current-password'}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
                     autoCapitalize="none"
-                    minLength={form.isRegister ? 12 : undefined}
                     maxLength={128}
                     required
                   />
@@ -233,23 +191,6 @@ export function AuthScreen() {
                 </div>
               </div>
 
-              {form.isRegister ? (
-                <div className="field-group">
-                  <label htmlFor="confirm-password">Confirm password</label>
-                  <Input
-                    id="confirm-password"
-                    type={form.showPassword ? 'text' : 'password'}
-                    value={form.confirmPassword}
-                    onChange={(event) => form.setConfirmPassword(event.target.value)}
-                    placeholder="Type your password again"
-                    autoComplete="new-password"
-                    autoCapitalize="none"
-                    maxLength={128}
-                    required
-                  />
-                </div>
-              ) : null}
-
               {form.error ? <p className="form-error" role="alert">{form.error}</p> : null}
 
               <Button type="submit" className="submit-button" disabled={form.busy}>
@@ -260,7 +201,7 @@ export function AuthScreen() {
                   </>
                 ) : (
                   <>
-                    {form.isRegister ? 'Create my account' : 'Sign in to StockMate'}
+                    Sign in to StockMate
                     <span className="button-arrow" aria-hidden="true">↗</span>
                   </>
                 )}

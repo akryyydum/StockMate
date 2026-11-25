@@ -24,7 +24,11 @@ type AuthContextValue = {
   isLoading: boolean;
   startupError: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  updateCredentials: (
+    currentPassword: string,
+    email: string,
+    password: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -114,12 +118,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [acceptSession],
   );
 
-  const register = useCallback(
-    async (name: string, email: string, password: string) => {
-      const session = await authApi.register(name, email, password);
+  const updateCredentials = useCallback(
+    async (currentPassword: string, email: string, password: string) => {
+      if (!accessToken) {
+        throw new Error('Sign in before updating your credentials.');
+      }
+      const session = await authApi.updateCredentials(
+        accessToken,
+        currentPassword,
+        email,
+        password,
+      );
       await acceptSession(session);
     },
-    [acceptSession],
+    [accessToken, acceptSession],
   );
 
   const logout = useCallback(async () => {
@@ -150,8 +162,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [refreshToken]);
 
   const value = useMemo(
-    () => ({ user, accessToken, isLoading, startupError, login, register, logout }),
-    [user, accessToken, isLoading, startupError, login, register, logout],
+    () => ({ user, accessToken, isLoading, startupError, login, updateCredentials, logout }),
+    [user, accessToken, isLoading, startupError, login, updateCredentials, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

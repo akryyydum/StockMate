@@ -27,7 +27,7 @@ describe('authentication API input handling', () => {
     assert.deepEqual(await response.json(), { status: 'ok' });
   });
 
-  it('rejects weak registration passwords before touching the database', async () => {
+  it('does not expose a public registration endpoint', async () => {
     const response = await fetch(`${baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -37,23 +37,7 @@ describe('authentication API input handling', () => {
         password: 'short',
       }),
     });
-    assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), {
-      message: 'Please check the information you entered.',
-    });
-  });
-
-  it('rejects bcrypt passwords that exceed the UTF-8 byte limit', async () => {
-    const response = await fetch(`${baseUrl}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Jordan Lee',
-        email: 'jordan@example.com',
-        password: 'é'.repeat(37),
-      }),
-    });
-    assert.equal(response.status, 400);
+    assert.equal(response.status, 404);
   });
 
   it('rejects malformed login input without revealing account details', async () => {
@@ -70,6 +54,34 @@ describe('authentication API input handling', () => {
 
   it('requires a bearer token for the account endpoint', async () => {
     const response = await fetch(`${baseUrl}/api/auth/me`);
+    assert.equal(response.status, 401);
+  });
+
+  it('requires authentication to access user management', async () => {
+    const response = await fetch(`${baseUrl}/api/users`);
+    assert.equal(response.status, 401);
+  });
+
+  it('requires authentication before creating users', async () => {
+    const response = await fetch(`${baseUrl}/api/users`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Jordan Lee',
+        email: 'jordan@example.com',
+        password: 'a'.repeat(12),
+        role: 'admin',
+      }),
+    });
+    assert.equal(response.status, 401);
+  });
+
+  it('requires authentication to change account credentials', async () => {
+    const response = await fetch(`${baseUrl}/api/auth/credentials`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ currentPassword: 'a', email: 'a@example.com', password: 'a'.repeat(12) }),
+    });
     assert.equal(response.status, 401);
   });
 

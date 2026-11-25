@@ -22,6 +22,17 @@ const userSchema = new mongoose.Schema(
       required: true,
       select: false,
     },
+    role: {
+      type: String,
+      enum: ['admin', 'superadmin'],
+      default: 'admin',
+      required: true,
+    },
+    mustChangeCredentials: {
+      type: Boolean,
+      default: false,
+      required: true,
+    },
   },
   { timestamps: true },
 );
