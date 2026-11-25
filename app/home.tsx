@@ -1,7 +1,6 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Image,
   Modal,
@@ -15,12 +14,14 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../src/auth/AuthProvider';
+import { Dashboard } from '../src/components/Dashboard';
 import { InventoryDashboard } from '../src/components/InventoryDashboard';
+import { LoadingAnimation } from '../src/components/LoadingAnimation';
 import { UserManagement } from '../src/components/UserManagement';
 import { useAppTheme } from '../src/ThemeProvider';
 import { fontFamilies, ThemeColors } from '../src/theme';
 
-type Section = 'inventory' | 'users';
+type Section = 'dashboard' | 'inventory' | 'users';
 
 export default function HomeScreen() {
   const { user, accessToken, updateCredentials, logout } = useAuth();
@@ -29,7 +30,7 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 980;
   const [sidebarWidth] = useState(() => new Animated.Value(248));
-  const [section, setSection] = useState<Section>('inventory');
+  const [section, setSection] = useState<Section>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -138,12 +139,10 @@ export default function HomeScreen() {
             busy={busy}
             collapsed={sidebarCollapsed}
             onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
-            mode={mode}
-            onToggleMode={toggleMode}
           />
         </Animated.View>
       ) : (
-        <MobileHeader user={signedInUser} onOpenMenu={() => setMenuOpen(true)} />
+        <MobileHeader onOpenMenu={() => setMenuOpen(true)} />
       )}
 
       <View style={styles.main}>
@@ -151,22 +150,21 @@ export default function HomeScreen() {
           <View>
             <Text style={styles.topbarEyebrow}>STOCKMATE CAFÉ</Text>
             <Text style={styles.topbarTitle}>
-              {section === 'inventory' ? 'Inventory overview' : 'Team access'}
+              {section === 'dashboard'
+                ? 'Dashboard'
+                : section === 'inventory'
+                  ? 'Inventory overview'
+                  : 'Team access'}
             </Text>
           </View>
-          <View style={styles.topbarUser}>
-            <View style={styles.topbarAvatar}>
-              <Text style={styles.topbarAvatarText}>
-                {signedInUser.name.slice(0, 1).toUpperCase()}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.topbarName}>{signedInUser.name}</Text>
-              <Text style={styles.topbarRole}>
-                {signedInUser.role === 'superadmin' ? 'Superadmin' : 'Admin'}
-              </Text>
-            </View>
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}
+            onPress={toggleMode}
+            style={({ pressed }) => [styles.themeToggle, pressed && styles.navPressed]}
+          >
+            <Text style={styles.themeToggleIcon}>{mode === 'light' ? '☾' : '☀'}</Text>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -174,11 +172,15 @@ export default function HomeScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          {section === 'inventory' ? (
-            <InventoryDashboard accessToken={accessToken} />
-          ) : (
-            <UserManagement accessToken={accessToken} role={signedInUser.role} />
-          )}
+          <PageTransition key={section}>
+            {section === 'dashboard' ? (
+              <Dashboard accessToken={accessToken} />
+            ) : section === 'inventory' ? (
+              <InventoryDashboard accessToken={accessToken} />
+            ) : (
+              <UserManagement accessToken={accessToken} role={signedInUser.role} currentUserId={signedInUser.id} />
+            )}
+          </PageTransition>
           <Text style={styles.footer}>StockMate · Your Inventory, Your Control.</Text>
         </ScrollView>
       </View>
@@ -206,8 +208,6 @@ export default function HomeScreen() {
                 busy={busy}
                 collapsed={sidebarCollapsed}
                 onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
-                mode={mode}
-                onToggleMode={toggleMode}
               />
             </Animated.View>
           </View>
@@ -233,13 +233,7 @@ function Brand({ compact = false, showText = true }: { compact?: boolean; showTe
   );
 }
 
-function MobileHeader({
-  user,
-  onOpenMenu,
-}: {
-  user: { name: string };
-  onOpenMenu: () => void;
-}) {
+function MobileHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
   return (
@@ -248,10 +242,30 @@ function MobileHeader({
         <Text style={styles.menuButtonText}>☰</Text>
       </Pressable>
       <Brand compact />
-      <View style={styles.mobileUser}>
-        <Text style={styles.mobileUserText}>{user.name.slice(0, 1).toUpperCase()}</Text>
-      </View>
     </View>
+  );
+}
+
+function PageTransition({ children }: { children: React.ReactNode }) {
+  const [progress] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: 240,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [progress]);
+  return (
+    <Animated.View
+      style={{
+        opacity: progress,
+        transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [7, 0] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
   );
 }
 
@@ -263,8 +277,6 @@ function Sidebar({
   busy,
   collapsed,
   onToggleCollapsed,
-  mode,
-  onToggleMode,
 }: {
   user: { name: string; email: string; role: 'admin' | 'superadmin' };
   section: Section;
@@ -273,8 +285,6 @@ function Sidebar({
   busy: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  mode: 'light' | 'dark';
-  onToggleMode: () => void;
 }) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
@@ -293,6 +303,13 @@ function Sidebar({
       </View>
       {!collapsed ? <Text style={styles.navCaption}>WORKSPACE</Text> : null}
       <NavButton
+        icon="⌂"
+        label="Dashboard"
+        collapsed={collapsed}
+        selected={section === 'dashboard'}
+        onPress={() => onNavigate('dashboard')}
+      />
+      <NavButton
         icon="▦"
         label="Inventory"
         collapsed={collapsed}
@@ -306,22 +323,6 @@ function Sidebar({
         selected={section === 'users'}
         onPress={() => onNavigate('users')}
       />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}
-        onPress={onToggleMode}
-        style={({ pressed }) => [
-          styles.navButton,
-          styles.themeButton,
-          collapsed && styles.collapsedNavButton,
-          pressed && styles.navPressed,
-        ]}
-      >
-        <Text style={styles.navIcon}>{mode === 'light' ? '☾' : '☀'}</Text>
-        {!collapsed ? (
-          <Text style={styles.navText}>{mode === 'light' ? 'Dark mode' : 'Light mode'}</Text>
-        ) : null}
-      </Pressable>
       <View style={styles.sidebarBottom}>
         <View style={styles.sidebarProfile}>
           <View style={styles.profileAvatar}>
@@ -346,7 +347,7 @@ function Sidebar({
             pressed && styles.logoutPressed,
           ]}
         >
-          {busy ? <ActivityIndicator size="small" color={palette.dirtyOrange} /> : (
+          {busy ? <LoadingAnimation size={18} /> : (
             <Text style={styles.logoutText}>{collapsed ? '↪' : '↪  Sign out'}</Text>
           )}
         </Pressable>
@@ -441,7 +442,7 @@ function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
     >
-      {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{title}</Text>}
+      {busy ? <LoadingAnimation size={20} /> : <Text style={styles.primaryButtonText}>{title}</Text>}
     </Pressable>
   );
 }
@@ -474,7 +475,6 @@ function createStyles(palette: ThemeColors) {
     navCaption: { color: palette.muted, fontSize: 8, letterSpacing: 1.1, fontFamily: fontFamilies.semiBold, marginBottom: 9, paddingHorizontal: 10 },
     navButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 11, borderRadius: 10, marginBottom: 4, overflow: 'hidden' },
     collapsedNavButton: { justifyContent: 'center', paddingHorizontal: 0 },
-    themeButton: { marginTop: 12 },
     navSelected: { backgroundColor: palette.accentSoft },
     navPressed: { opacity: 0.78 },
     navIcon: { width: 19, textAlign: 'center', color: palette.muted, fontSize: 15 },
@@ -498,19 +498,14 @@ function createStyles(palette: ThemeColors) {
     topbar: { minHeight: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 26, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper },
     topbarEyebrow: { color: palette.muted, fontSize: 7, letterSpacing: 1.1, fontFamily: fontFamilies.semiBold },
     topbarTitle: { color: palette.ink, fontSize: 15, fontFamily: fontFamilies.semiBold, marginTop: 3 },
-    topbarUser: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-    topbarAvatar: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.yellowSoft },
-    topbarAvatarText: { color: palette.dirtyOrange, fontSize: 11, fontFamily: fontFamilies.bold },
-    topbarName: { color: palette.ink, fontSize: 9, fontFamily: fontFamilies.semiBold },
-    topbarRole: { color: palette.muted, fontSize: 8, fontFamily: fontFamilies.regular, marginTop: 2 },
+    themeToggle: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surfaceSubtle },
+    themeToggleIcon: { color: palette.dirtyOrange, fontSize: 21, lineHeight: 26 },
     contentScroll: { flex: 1 },
     content: { width: '100%', maxWidth: 1500, alignSelf: 'center', padding: 25, gap: 17 },
     footer: { color: palette.muted, fontSize: 8, textAlign: 'center', fontFamily: fontFamilies.regular, marginTop: 2 },
     mobileHeader: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper },
     menuButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: palette.accentSoft },
     menuButtonText: { color: palette.dirtyOrange, fontSize: 16 },
-    mobileUser: { width: 30, height: 30, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto', backgroundColor: palette.yellowSoft },
-    mobileUserText: { color: palette.dirtyOrange, fontSize: 10, fontFamily: fontFamilies.bold },
     mobileMenuBackdrop: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(33, 29, 26, 0.36)' },
     menuDismiss: { flex: 1 },
     mobileMenu: { maxWidth: '84%', height: '100%', flexShrink: 0, overflow: 'hidden', backgroundColor: palette.paper },

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -17,6 +16,7 @@ import {
 } from '../auth/authApi';
 import { useAppTheme } from '../ThemeProvider';
 import { fontFamilies, ThemeColors } from '../theme';
+import { LoadingAnimation } from './LoadingAnimation';
 
 type Props = {
   accessToken: string;
@@ -67,9 +67,6 @@ export function InventoryDashboard({ accessToken }: Props) {
     totalItems: 0,
     movementsToday: 0,
   });
-  const [dailyMovements, setDailyMovements] = useState<
-    { date: string; label: string; incoming: number; outgoing: number }[]
-  >([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +86,6 @@ export function InventoryDashboard({ accessToken }: Props) {
         if (!active) return;
         setItems(data.items);
         setSummary(data.summary);
-        setDailyMovements(data.dailyMovements);
       })
       .catch((loadError: unknown) => {
         if (active) {
@@ -117,7 +113,6 @@ export function InventoryDashboard({ accessToken }: Props) {
     const data = await authApi.inventory(accessToken);
     setItems(data.items);
     setSummary(data.summary);
-    setDailyMovements(data.dailyMovements);
   }
 
   function openCreateItem() {
@@ -228,11 +223,6 @@ export function InventoryDashboard({ accessToken }: Props) {
     }
   }
 
-  const movementMaximum = Math.max(
-    1,
-    ...dailyMovements.map((day) => day.incoming + day.outgoing),
-  );
-
   return (
     <View style={styles.page}>
       <View style={styles.headingRow}>
@@ -277,48 +267,13 @@ export function InventoryDashboard({ accessToken }: Props) {
         />
       </View>
 
-      <View style={styles.analyticsCard}>
-        <View style={styles.analyticsHeading}>
-          <View>
-            <Text style={styles.cardTitle}>Stock movement</Text>
-            <Text style={styles.cardHint}>Incoming and outgoing movements · last 7 days</Text>
-          </View>
-          <View style={styles.legend}>
-            <LegendDot label="In" color={palette.burntYellow} />
-            <LegendDot label="Out" color={palette.pumpkinOrange} />
-          </View>
-        </View>
-        <View style={styles.chart}>
-          {dailyMovements.map((day) => {
-            const fullHeight = Math.max(5, ((day.incoming + day.outgoing) / movementMaximum) * 100);
-            const incomingHeight =
-              day.incoming + day.outgoing === 0
-                ? 0
-                : (day.incoming / (day.incoming + day.outgoing)) * fullHeight;
-            const outgoingHeight = fullHeight - incomingHeight;
-            return (
-              <View key={day.date} style={styles.chartDay}>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barOutgoing, { height: outgoingHeight }]} />
-                  <View style={[styles.barIncoming, { height: incomingHeight }]} />
-                </View>
-                <Text style={styles.chartLabel}>{day.label}</Text>
-              </View>
-            );
-          })}
-          {dailyMovements.length === 0 ? (
-            <Text style={styles.chartEmpty}>Stock movements will appear here.</Text>
-          ) : null}
-        </View>
-      </View>
-
       <View style={styles.inventoryCard}>
         <View style={styles.listHeading}>
           <View>
             <Text style={styles.cardTitle}>Inventory list</Text>
             <Text style={styles.cardHint}>Coffee, milk, syrups, and café supplies.</Text>
           </View>
-          {loading ? <ActivityIndicator color={palette.dirtyOrange} /> : null}
+          {loading ? <LoadingAnimation size={20} /> : null}
         </View>
 
         <View style={styles.filters}>
@@ -357,8 +312,7 @@ export function InventoryDashboard({ accessToken }: Props) {
 
         {loading ? (
           <View style={styles.loading}>
-            <ActivityIndicator color={palette.dirtyOrange} />
-            <Text style={styles.loadingText}>Loading inventory…</Text>
+            <LoadingAnimation label="Loading inventory" size={40} />
           </View>
         ) : filteredItems.length === 0 ? (
           <View style={styles.empty}>
@@ -533,17 +487,6 @@ function MetricCard({
   );
 }
 
-function LegendDot({ label, color }: { label: string; color: string }) {
-  const { palette } = useAppTheme();
-  const styles = createStyles(palette);
-  return (
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: color }]} />
-      <Text style={styles.legendText}>{label}</Text>
-    </View>
-  );
-}
-
 function TableCell({
   label,
   unit,
@@ -637,7 +580,7 @@ function Button({
       onPress={onPress}
       style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
     >
-      {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryButtonText}>{label}</Text>}
+      {busy ? <LoadingAnimation size={20} /> : <Text style={styles.primaryButtonText}>{label}</Text>}
     </Pressable>
   );
 }
@@ -715,21 +658,8 @@ function createStyles(palette: ThemeColors) {
   metricText_ink: { color: palette.ink },
   metricValue: { color: palette.ink, fontSize: 23, fontFamily: fontFamilies.bold, marginTop: 14 },
   metricDetail: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular, marginTop: 3 },
-  analyticsCard: { padding: 19, backgroundColor: palette.paper, borderRadius: 16, borderWidth: 1, borderColor: palette.line },
-  analyticsHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   cardTitle: { color: palette.ink, fontSize: 16, fontFamily: fontFamilies.semiBold },
   cardHint: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular, marginTop: 4 },
-  legend: { flexDirection: 'row', gap: 12 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 7, height: 7, borderRadius: 4 },
-  legendText: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', minHeight: 116, marginTop: 18 },
-  chartDay: { flex: 1, height: 112, alignItems: 'center', justifyContent: 'flex-end', gap: 7 },
-  barTrack: { width: 18, height: 88, justifyContent: 'flex-end', overflow: 'hidden', borderRadius: 6, backgroundColor: palette.boneWhite },
-  barIncoming: { width: '100%', backgroundColor: palette.burntYellow },
-  barOutgoing: { width: '100%', backgroundColor: palette.pumpkinOrange },
-  chartLabel: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium },
-  chartEmpty: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular, alignSelf: 'center' },
   inventoryCard: { backgroundColor: palette.paper, borderRadius: 16, borderWidth: 1, borderColor: palette.line, overflow: 'hidden' },
   listHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 19 },
   filters: { gap: 10, paddingHorizontal: 19, paddingBottom: 15 },

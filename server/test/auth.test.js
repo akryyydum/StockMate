@@ -76,6 +76,18 @@ describe('authentication API input handling', () => {
     assert.equal(response.status, 401);
   });
 
+  it('requires authentication before editing or removing users', async () => {
+    const responses = await Promise.all([
+      fetch(`${baseUrl}/api/users/507f1f77bcf86cd799439011`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'updated@example.com' }),
+      }),
+      fetch(`${baseUrl}/api/users/507f1f77bcf86cd799439011`, { method: 'DELETE' }),
+    ]);
+    assert.deepEqual(responses.map((response) => response.status), [401, 401]);
+  });
+
   it('requires authentication to change account credentials', async () => {
     const response = await fetch(`${baseUrl}/api/auth/credentials`, {
       method: 'PUT',
@@ -87,6 +99,7 @@ describe('authentication API input handling', () => {
 
   it('requires authentication for inventory read, creation, and stock movement', async () => {
     const requests = [
+      fetch(`${baseUrl}/api/dashboard`),
       fetch(`${baseUrl}/api/inventory`),
       fetch(`${baseUrl}/api/inventory`, {
         method: 'POST',
@@ -112,7 +125,7 @@ describe('authentication API input handling', () => {
       }),
     ];
     const responses = await Promise.all(requests);
-    assert.deepEqual(responses.map((response) => response.status), [401, 401, 401, 401]);
+    assert.deepEqual(responses.map((response) => response.status), [401, 401, 401, 401, 401]);
   });
 
   it('rejects unapproved browser origins', async () => {

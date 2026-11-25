@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,13 +11,15 @@ import {
 import { authApi, User } from '../auth/authApi';
 import { useAppTheme } from '../ThemeProvider';
 import { fontFamilies, ThemeColors } from '../theme';
+import { LoadingAnimation } from './LoadingAnimation';
 
 type Props = {
   accessToken: string;
   role: User['role'];
+  currentUserId: string;
 };
 
-export function UserManagement({ accessToken, role }: Props) {
+export function UserManagement({ accessToken, role, currentUserId }: Props) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
   const [users, setUsers] = useState<User[]>([]);
@@ -29,6 +32,10 @@ export function UserManagement({ accessToken, role }: Props) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'superadmin'>('admin');
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editEmail, setEditEmail] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [removingUser, setRemovingUser] = useState<User | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,6 +86,61 @@ export function UserManagement({ accessToken, role }: Props) {
     }
   }
 
+  function openEditUser(user: User) {
+    setEditingUser(user);
+    setEditEmail(user.email);
+    setEditPassword('');
+    setError(null);
+    setNotice(null);
+  }
+
+  async function saveUser() {
+    if (!editingUser) return;
+    setError(null);
+    setNotice(null);
+    if (editPassword.length > 0 && editPassword.length < 12) {
+      setError('Use at least 12 characters for the new password.');
+      return;
+    }
+    if (editEmail.trim().toLowerCase() === editingUser.email && !editPassword) {
+      setError('Change the email address or enter a new password.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const updates: { email?: string; password?: string } = {};
+      if (editEmail.trim().toLowerCase() !== editingUser.email) updates.email = editEmail.trim();
+      if (editPassword) updates.password = editPassword;
+      const { user } = await authApi.updateUser(accessToken, editingUser.id, updates);
+      setUsers((current) => current.map((item) => item.id === user.id ? user : item));
+      setEditingUser(null);
+      setEditPassword('');
+      setNotice(`${user.name}'s account has been updated.`);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Unable to update this user.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeUser() {
+    if (!removingUser) return;
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    try {
+      await authApi.deleteUser(accessToken, removingUser.id);
+      setUsers((current) => current.filter((user) => user.id !== removingUser.id));
+      setNotice(`${removingUser.name}'s account has been removed.`);
+      setRemovingUser(null);
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : 'Unable to remove this user.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <View style={styles.page}>
       <View>
@@ -92,13 +154,19 @@ export function UserManagement({ accessToken, role }: Props) {
             <Text style={styles.cardTitle}>Team members</Text>
             <Text style={styles.cardSubtitle}>{users.length} account{users.length === 1 ? '' : 's'} in this workspace</Text>
           </View>
-          {loading ? <ActivityIndicator color={palette.dirtyOrange} /> : null}
+          {loading ? <LoadingAnimation size={20} /> : null}
         </View>
 
-        {error ? <Feedback text={error} danger /> : null}
+        {error && !editingUser && !removingUser ? <Feedback text={error} danger /> : null}
         {notice ? <Feedback text={notice} /> : null}
 
-        {users.map((user) => (
+        {loading ? (
+          <View style={styles.loading}>
+            <LoadingAnimation label="Loading team members" size={36} />
+          </View>
+        ) : null}
+
+        {!loading ? users.map((user) => (
           <View key={user.id} style={styles.userRow}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{user.name.slice(0, 1).toUpperCase()}</Text>
@@ -112,8 +180,20 @@ export function UserManagement({ accessToken, role }: Props) {
                 {user.role === 'superadmin' ? 'SUPERADMIN' : 'ADMIN'}
               </Text>
             </View>
+            {role === 'superadmin' ? (
+              <View style={styles.rowActions}>
+                <RowAction label="Edit" onPress={() => openEditUser(user)} />
+                <RowAction
+                  label="Remove"
+                  destructive
+                  disabled={user.id === currentUserId}
+                  accessibilityLabel={user.id === currentUserId ? 'Cannot remove your own account' : undefined}
+                  onPress={() => setRemovingUser(user)}
+                />
+              </View>
+            ) : null}
           </View>
-        ))}
+        )) : null}
 
         {!loading && users.length === 0 ? (
           <Text style={styles.emptyText}>No user accounts found.</Text>
@@ -143,17 +223,89 @@ export function UserManagement({ accessToken, role }: Props) {
             onPress={() => void createUser()}
             style={({ pressed }) => [styles.submitButton, pressed && styles.submitPressed]}
           >
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Add user</Text>}
+            {busy ? <LoadingAnimation size={20} /> : <Text style={styles.submitText}>Add user</Text>}
           </Pressable>
         </View>
       ) : (
         <View style={styles.permissionNote}>
           <Text style={styles.permissionIcon}>i</Text>
           <Text style={styles.permissionText}>
-            You can view the team, but only a superadmin can add user accounts.
+            You can view the team, but only a superadmin can add, edit, or remove user accounts.
           </Text>
         </View>
       )}
+
+      <Modal
+        animationType="fade"
+        onRequestClose={() => {
+          setEditingUser(null);
+          setRemovingUser(null);
+          setError(null);
+        }}
+        transparent
+        visible={Boolean(editingUser || removingUser)}
+      >
+        <View style={styles.modalBackdrop}>
+          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+            <View style={styles.modalCard}>
+              {editingUser ? (
+                <>
+                  <Text style={styles.modalTitle}>Edit user account</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Leave the password blank to keep the current password. If you set a new password or email, the user will need to update their credentials at next sign-in.
+                  </Text>
+                  <Field label="Email address" value={editEmail} onChangeText={setEditEmail} autoCapitalize="none" />
+                  <Field
+                    label="New password (optional, 12+ characters)"
+                    value={editPassword}
+                    onChangeText={setEditPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+                </>
+              ) : removingUser ? (
+                <>
+                  <Text style={styles.modalTitle}>Remove user account?</Text>
+                  <Text style={styles.modalSubtitle}>
+                    {`This will permanently remove ${removingUser.name} (${removingUser.email}) and revoke their refresh sessions. This cannot be undone.`}
+                  </Text>
+                </>
+              ) : null}
+              {error ? <Feedback text={error} danger /> : null}
+              <View style={styles.modalActions}>
+                <RowAction
+                  label="Cancel"
+                  disabled={busy}
+                  onPress={() => {
+                    setEditingUser(null);
+                    setRemovingUser(null);
+                    setError(null);
+                  }}
+                />
+                {editingUser ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => void saveUser()}
+                    style={[styles.submitButton, busy && styles.disabledButton]}
+                  >
+                    {busy ? <LoadingAnimation size={20} /> : <Text style={styles.submitText}>Save changes</Text>}
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => void removeUser()}
+                    style={[styles.removeConfirmButton, busy && styles.disabledButton]}
+                  >
+                    {busy ? <LoadingAnimation size={20} /> : <Text style={styles.submitText}>Remove user</Text>}
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -224,21 +376,72 @@ function Feedback({ text, danger = false }: { text: string; danger?: boolean }) 
   return <Text accessibilityRole="alert" style={[styles.feedback, danger && styles.feedbackDanger]}>{text}</Text>;
 }
 
+function RowAction({
+  label,
+  onPress,
+  destructive = false,
+  disabled = false,
+  accessibilityLabel,
+}: {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+}) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.rowAction,
+        destructive && styles.rowActionDestructive,
+        disabled && styles.disabledButton,
+        pressed && !disabled && styles.rowActionPressed,
+      ]}
+    >
+      <Text style={[styles.rowActionText, destructive && styles.rowActionDestructiveText]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 function createStyles(palette: ThemeColors) {
   return StyleSheet.create({
   page: { gap: 18 },
+  loading: { minHeight: 140, justifyContent: 'center', alignItems: 'center' },
   title: { color: palette.ink, fontSize: 24, fontFamily: fontFamilies.bold },
   subtitle: { color: palette.muted, fontSize: 12, fontFamily: fontFamilies.regular, marginTop: 4 },
   card: { padding: 20, borderRadius: 18, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   cardTitle: { color: palette.ink, fontSize: 16, fontFamily: fontFamilies.semiBold },
   cardSubtitle: { color: palette.muted, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.regular, marginTop: 4, marginBottom: 14 },
-  userRow: { minHeight: 63, flexDirection: 'row', alignItems: 'center', gap: 11, borderTopWidth: 1, borderTopColor: palette.line },
+  userRow: { minHeight: 63, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 11, paddingVertical: 9, borderTopWidth: 1, borderTopColor: palette.line },
   avatar: { width: 35, height: 35, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.yellowSoft },
   avatarText: { color: palette.dirtyOrange, fontSize: 13, fontFamily: fontFamilies.bold },
   userDetails: { flex: 1 },
   userName: { color: palette.ink, fontSize: 11, fontFamily: fontFamilies.semiBold },
   userEmail: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 3 },
+  rowActions: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
+  rowAction: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 9, borderRadius: 9, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+  rowActionDestructive: { borderColor: palette.danger, backgroundColor: palette.paper },
+  rowActionPressed: { opacity: 0.75 },
+  rowActionText: { color: palette.ink, fontSize: 9, fontFamily: fontFamilies.semiBold },
+  rowActionDestructiveText: { color: palette.danger },
+  disabledButton: { opacity: 0.45 },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: 18, backgroundColor: 'rgba(0,0,0,0.42)' },
+  modalScroll: { flexGrow: 1, justifyContent: 'center' },
+  modalCard: { width: '100%', maxWidth: 520, alignSelf: 'center', padding: 20, borderRadius: 18, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+  modalTitle: { color: palette.ink, fontSize: 17, fontFamily: fontFamilies.bold },
+  modalSubtitle: { color: palette.muted, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.regular, marginTop: 6, marginBottom: 15 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 9, marginTop: 14 },
+  removeConfirmButton: { minHeight: 38, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, backgroundColor: palette.danger },
   roleBadge: { backgroundColor: palette.yellowSoft, borderRadius: 99, paddingHorizontal: 9, paddingVertical: 6 },
   superadminBadge: { backgroundColor: palette.orangeSoft },
   roleText: { color: palette.statusInText, fontSize: 8, letterSpacing: 0.4, fontFamily: fontFamilies.bold },

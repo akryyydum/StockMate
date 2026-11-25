@@ -1,15 +1,18 @@
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { AuthScreen } from '../src/components/AuthScreen';
 import { useAuth } from '../src/auth/AuthProvider';
+import { LoadingAnimation } from '../src/components/LoadingAnimation';
+import { useAppTheme } from '../src/ThemeProvider';
 
 export default function IndexScreen() {
   const { isLoading, user } = useAuth();
+  const { palette } = useAppTheme();
 
   if (isLoading) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#1f6947" />
+      <View style={[styles.loading, { backgroundColor: palette.background }]}>
+        <LoadingAnimation label="Checking your session" size={42} />
       </View>
     );
   }
@@ -26,6 +29,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f7f2',
   },
 });

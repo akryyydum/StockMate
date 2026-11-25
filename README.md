@@ -78,7 +78,8 @@ Deploy the generated `dist/` directory to a static host over HTTPS. On supported
 
 - The authenticated dashboard tracks café products, categories, units, quantity on hand, minimum stock, unit cost, and stock value in PHP.
 - Inventory status is calculated from on-hand quantity and the minimum stock level. Stock-in and stock-out actions update quantities and are recorded as dated movements.
-- The overview cards and seven-day movement chart are calculated from stored inventory and movement records. User management is available separately from the responsive sidebar.
+- Dashboard cards and the seven-day stock-movement chart are calculated from stored inventory and movement records. User management is available separately from the responsive sidebar.
+- The dashboard summarizes inventory health, stock value, team size, and today's movements, and shows recent sign-ins, user creation, item changes, and stock changes from persisted activity records.
 - The signed-in interface includes a light/dark mode toggle and a collapsible sidebar. The selected appearance is saved locally on each platform.
 
 This is an inventory and authentication starter, not a complete production platform. Add email verification, password reset, monitoring, backups, and deployment-specific proxy/rate-limit configuration before a public launch.

@@ -1,7 +1,7 @@
 import { useAuthForm } from '../auth/useAuthForm';
 import { colors, fontFamilies } from '../theme';
+import { LoadingAnimation } from './LoadingAnimation';
 import {
-  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -117,7 +117,7 @@ export function AuthScreen() {
               ]}
             >
               {form.busy ? (
-                <ActivityIndicator color={colors.paper} />
+                <LoadingAnimation size={22} />
               ) : (
                 <Text style={styles.submitText}>Sign in to StockMate</Text>
               )}

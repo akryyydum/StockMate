@@ -37,6 +37,34 @@ export type InventoryOverview = {
     totalItems: number;
     movementsToday: number;
   };
+};
+
+export type DashboardActivity = {
+  id: string;
+  actorName: string;
+  actorRole: User['role'];
+  type: 'login' | 'user_created' | 'inventory_created' | 'inventory_updated' | 'stock_in' | 'stock_out';
+  itemName: string | null;
+  targetName: string | null;
+  quantity: number | null;
+  unit: string | null;
+  createdAt: string;
+};
+
+export type DashboardOverview = {
+  summary: {
+    stockValue: number;
+    totalItems: number;
+    inStockItems: number;
+    lowStockItems: number;
+    outOfStockItems: number;
+    activeUsers: number;
+    movementsToday: number;
+    stockInsToday: number;
+    stockOutsToday: number;
+    newItemsThisWeek: number;
+  };
+  activities: DashboardActivity[];
   dailyMovements: {
     date: string;
     label: string;
@@ -145,9 +173,30 @@ export const authApi = {
     });
   },
 
+  updateUser(accessToken: string, userId: string, updates: { email?: string; password?: string }) {
+    return request<{ user: User }>(`/users/${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(updates),
+    });
+  },
+
+  deleteUser(accessToken: string, userId: string) {
+    return request<void>(`/users/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  },
+
   inventory(accessToken: string) {
     return request<InventoryOverview>('/inventory', {
       headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  },
+
+  dashboard(accessToken: string) {
+    return request<DashboardOverview>('/dashboard', {
+      headers: { Authorization: 'Bearer ' + accessToken },
     });
   },
 

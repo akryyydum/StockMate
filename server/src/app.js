@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { z } from 'zod';
+import { ActivityLog } from './models/ActivityLog.js';
 import { InventoryItem } from './models/InventoryItem.js';
 import { RefreshToken } from './models/RefreshToken.js';
 import { StockMovement } from './models/StockMovement.js';
@@ -36,7 +37,7 @@ app.use(
       error.status = 403;
       callback(error);
     },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
@@ -73,6 +74,11 @@ const createUserSchema = z.object({
   password: passwordSchema,
   role: z.enum(['admin', 'superadmin']),
 });
+
+const updateUserSchema = z.object({
+  email: emailSchema.optional(),
+  password: passwordSchema.optional(),
+}).refine((value) => Object.keys(value).length > 0);
 
 const inventoryItemSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -125,6 +131,16 @@ function publicInventoryItem(item) {
     status: inventoryStatus(item),
     updatedAt: item.updatedAt,
   };
+}
+
+function recordActivity(actor, type, details = {}) {
+  return ActivityLog.create({
+    actorId: actor.id,
+    actorName: actor.name,
+    actorRole: actor.role,
+    type,
+    ...details,
+  });
 }
 
 function createAccessToken(user) {
@@ -238,6 +254,7 @@ app.post('/api/auth/login', authRateLimit, async (req, res) => {
     return;
   }
 
+  await recordActivity(user, 'login');
   res.json(await createSession(user));
 });
 
@@ -345,6 +362,12 @@ app.post(
     const passwordHash = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
     try {
       const user = await User.create({ ...userInput, passwordHash });
+      try {
+        await recordActivity(req.authUser, 'user_created', { targetName: user.name });
+      } catch (error) {
+        await User.deleteOne({ _id: user.id });
+        throw error;
+      }
       res.status(201).json({ user: publicUser(user) });
     } catch (error) {
       if (error?.code === 11000) {
@@ -356,17 +379,169 @@ app.post(
   },
 );
 
+app.patch(
+  '/api/users/:userId',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  requireSuperadmin,
+  async (req, res) => {
+    const input = validate(updateUserSchema, req.body, res);
+    if (!input) return;
+    if (!mongoose.isValidObjectId(req.params.userId)) {
+      res.status(404).json({ message: 'User account not found.' });
+      return;
+    }
+
+    const user = await User.findById(req.params.userId).select('+passwordHash');
+    if (!user) {
+      res.status(404).json({ message: 'User account not found.' });
+      return;
+    }
+    if (input.email !== undefined) user.email = input.email;
+    if (input.password !== undefined) {
+      user.passwordHash = await bcrypt.hash(input.password, PASSWORD_HASH_ROUNDS);
+    }
+    if (input.email !== undefined || input.password !== undefined) {
+      user.mustChangeCredentials = user.id === req.authUser.id ? false : true;
+    }
+
+    try {
+      await user.save();
+    } catch (error) {
+      if (error?.code === 11000) {
+        res.status(409).json({ message: 'An account with that email already exists.' });
+        return;
+      }
+      throw error;
+    }
+
+    await RefreshToken.deleteMany({ userId: user.id });
+    res.json({ user: publicUser(user) });
+  },
+);
+
+app.delete(
+  '/api/users/:userId',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  requireSuperadmin,
+  async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.userId)) {
+      res.status(404).json({ message: 'User account not found.' });
+      return;
+    }
+    if (req.params.userId === req.authUser.id) {
+      res.status(400).json({ message: 'You cannot remove your own account.' });
+      return;
+    }
+
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      res.status(404).json({ message: 'User account not found.' });
+      return;
+    }
+    if (user.role === 'superadmin' && await User.countDocuments({ role: 'superadmin' }) <= 1) {
+      res.status(400).json({ message: 'The last superadmin account cannot be removed.' });
+      return;
+    }
+
+    await Promise.all([
+      User.deleteOne({ _id: user.id }),
+      RefreshToken.deleteMany({ userId: user.id }),
+    ]);
+    res.status(204).end();
+  },
+);
+
+app.get(
+  '/api/dashboard',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  async (_req, res) => {
+    const now = new Date();
+    const today = new Date(now);
+    today.setUTCHours(0, 0, 0, 0);
+    const weekStart = new Date(today);
+    weekStart.setUTCDate(weekStart.getUTCDate() - 6);
+    const [items, movements, activities, activeUsers, newItemsThisWeek] = await Promise.all([
+      InventoryItem.find().select('quantity minimumStock unitCost createdAt'),
+      StockMovement.find({ createdAt: { $gte: weekStart } }).select('type createdAt'),
+      ActivityLog.find().sort({ createdAt: -1 }).limit(25).select(
+        'actorName actorRole type itemName targetName quantity unit createdAt',
+      ),
+      User.countDocuments(),
+      InventoryItem.countDocuments({ createdAt: { $gte: weekStart } }),
+    ]);
+    const dailyMovements = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(weekStart);
+      date.setUTCDate(weekStart.getUTCDate() + index);
+      const dateKey = date.toISOString().slice(0, 10);
+      const dayMovements = movements.filter(
+        (movement) => movement.createdAt.toISOString().slice(0, 10) === dateKey,
+      );
+      return {
+        date: dateKey,
+        label: date.toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' }),
+        incoming: dayMovements.filter((movement) => movement.type === 'in').length,
+        outgoing: dayMovements.filter((movement) => movement.type === 'out').length,
+      };
+    });
+
+    const summary = items.reduce(
+      (totals, item) => {
+        const status = inventoryStatus(item);
+        totals.stockValue += item.quantity * item.unitCost;
+        if (status === 'in-stock') totals.inStockItems += 1;
+        if (status === 'low-stock') totals.lowStockItems += 1;
+        if (status === 'out-of-stock') totals.outOfStockItems += 1;
+        return totals;
+      },
+      {
+        stockValue: 0,
+        totalItems: items.length,
+        inStockItems: 0,
+        lowStockItems: 0,
+        outOfStockItems: 0,
+        activeUsers,
+        movementsToday: movements.filter((movement) => movement.createdAt >= today).length,
+        stockInsToday: movements.filter((movement) => movement.createdAt >= today && movement.type === 'in').length,
+        stockOutsToday: movements.filter((movement) => movement.createdAt >= today && movement.type === 'out').length,
+        newItemsThisWeek,
+      },
+    );
+
+    res.json({
+      summary,
+      activities: activities.map((activity) => ({
+        id: activity.id,
+        actorName: activity.actorName,
+        actorRole: activity.actorRole,
+        type: activity.type,
+        itemName: activity.itemName ?? null,
+        targetName: activity.targetName ?? null,
+        quantity: activity.quantity ?? null,
+        unit: activity.unit ?? null,
+        createdAt: activity.createdAt,
+      })),
+      dailyMovements,
+    });
+  },
+);
+
 app.get(
   '/api/inventory',
   requireAccessToken,
   requireCurrentUser,
   requireUpdatedCredentials,
   async (_req, res) => {
-    const [items, movements] = await Promise.all([
+    const [items, todayMovements] = await Promise.all([
       InventoryItem.find().sort({ name: 1 }),
       StockMovement.find({
-        createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      }).select('type quantity createdAt'),
+        createdAt: { $gte: new Date(new Date().setUTCHours(0, 0, 0, 0)) },
+      }).select('createdAt'),
     ]);
 
     const today = new Date();
@@ -381,29 +556,13 @@ app.get(
       { stockValue: 0, lowStockItems: 0, outOfStockItems: 0 },
     );
 
-    const dailyMovements = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(today);
-      date.setUTCDate(today.getUTCDate() - (6 - index));
-      const key = date.toISOString().slice(0, 10);
-      const dayMovements = movements.filter(
-        (movement) => movement.createdAt.toISOString().slice(0, 10) === key,
-      );
-      return {
-        date: key,
-        label: date.toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' }),
-        incoming: dayMovements.filter((movement) => movement.type === 'in').length,
-        outgoing: dayMovements.filter((movement) => movement.type === 'out').length,
-      };
-    });
-
     res.json({
       items: items.map(publicInventoryItem),
       summary: {
         ...totals,
         totalItems: items.length,
-        movementsToday: movements.filter((movement) => movement.createdAt >= today).length,
+        movementsToday: todayMovements.length,
       },
-      dailyMovements,
     });
   },
 );
@@ -417,6 +576,12 @@ app.post(
     const input = validate(inventoryItemSchema, req.body, res);
     if (!input) return;
     const item = await InventoryItem.create(input);
+    try {
+      await recordActivity(req.authUser, 'inventory_created', { itemName: item.name });
+    } catch (error) {
+      await InventoryItem.deleteOne({ _id: item.id });
+      throw error;
+    }
     res.status(201).json({ item: publicInventoryItem(item) });
   },
 );
@@ -438,20 +603,43 @@ app.patch(
       res.status(404).json({ message: 'Inventory item not found.' });
       return;
     }
+    const previousValues = {
+      name: item.name,
+      category: item.category,
+      unit: item.unit,
+      quantity: item.quantity,
+      minimumStock: item.minimumStock,
+      unitCost: item.unitCost,
+    };
     const quantityDifference =
       input.quantity === undefined ? 0 : input.quantity - item.quantity;
     Object.assign(item, input);
     await item.save();
+    let movement;
     if (quantityDifference !== 0) {
       try {
-        await StockMovement.create({
+        movement = await StockMovement.create({
           itemId: item.id,
           type: quantityDifference > 0 ? 'in' : 'out',
           quantity: Math.abs(quantityDifference),
           performedBy: req.authUserId,
         });
+        await recordActivity(
+          req.authUser,
+          quantityDifference > 0 ? 'stock_in' : 'stock_out',
+          { itemName: item.name, quantity: Math.abs(quantityDifference), unit: item.unit },
+        );
       } catch (error) {
-        item.quantity -= quantityDifference;
+        if (movement) await StockMovement.deleteOne({ _id: movement.id });
+        Object.assign(item, previousValues);
+        await item.save();
+        throw error;
+      }
+    } else {
+      try {
+        await recordActivity(req.authUser, 'inventory_updated', { itemName: item.name });
+      } catch (error) {
+        Object.assign(item, previousValues);
         await item.save();
         throw error;
       }
@@ -491,12 +679,22 @@ app.post(
     }
 
     try {
-      await StockMovement.create({
+      const movement = await StockMovement.create({
         itemId: item.id,
         type: input.type,
         quantity: input.quantity,
         performedBy: req.authUserId,
       });
+      try {
+        await recordActivity(
+          req.authUser,
+          input.type === 'in' ? 'stock_in' : 'stock_out',
+          { itemName: item.name, quantity: input.quantity, unit: item.unit },
+        );
+      } catch (error) {
+        await StockMovement.deleteOne({ _id: movement.id });
+        throw error;
+      }
     } catch (error) {
       const rollback =
         input.type === 'in'
