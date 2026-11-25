@@ -376,7 +376,7 @@ export function InventoryDashboard({ accessToken }: Props) {
         ) : (
           <ScrollView
             horizontal
-            showsHorizontalScrollIndicator
+            showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.tableScrollContent}
           >
             <View style={styles.table}>

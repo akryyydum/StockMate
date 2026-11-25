@@ -1,7 +1,8 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   Modal,
   Pressable,
@@ -27,6 +28,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 980;
+  const [sidebarWidth] = useState(() => new Animated.Value(248));
   const [section, setSection] = useState<Section>('inventory');
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -37,6 +39,14 @@ export default function HomeScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const styles = createStyles(palette);
+
+  useEffect(() => {
+    Animated.timing(sidebarWidth, {
+      toValue: sidebarCollapsed ? 76 : 248,
+      duration: 240,
+      useNativeDriver: false,
+    }).start();
+  }, [sidebarCollapsed, sidebarWidth]);
 
   if (!user || !accessToken) {
     return <Redirect href="/" />;
@@ -119,19 +129,21 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.app, !isDesktop && styles.mobileApp]}>
       {isDesktop ? (
-        <Sidebar
-          user={signedInUser}
-          section={section}
-          onNavigate={navigate}
-          onLogout={() => void handleLogout()}
-          busy={busy}
-          collapsed={sidebarCollapsed}
-          onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
-          mode={mode}
-          onToggleMode={toggleMode}
-        />
-        ) : (
-          <MobileHeader user={signedInUser} onOpenMenu={() => setMenuOpen(true)} />
+        <Animated.View style={[styles.sidebarFrame, { width: sidebarWidth }]}>
+          <Sidebar
+            user={signedInUser}
+            section={section}
+            onNavigate={navigate}
+            onLogout={() => void handleLogout()}
+            busy={busy}
+            collapsed={sidebarCollapsed}
+            onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            mode={mode}
+            onToggleMode={toggleMode}
+          />
+        </Animated.View>
+      ) : (
+        <MobileHeader user={signedInUser} onOpenMenu={() => setMenuOpen(true)} />
       )}
 
       <View style={styles.main}>
@@ -185,7 +197,7 @@ export default function HomeScreen() {
               onPress={() => setMenuOpen(false)}
               style={styles.menuDismiss}
             />
-            <View style={[styles.mobileMenu, sidebarCollapsed && styles.mobileMenuCollapsed]}>
+            <Animated.View style={[styles.mobileMenu, { width: sidebarWidth }]}>
               <Sidebar
                 user={signedInUser}
                 section={section}
@@ -197,7 +209,7 @@ export default function HomeScreen() {
                 mode={mode}
                 onToggleMode={toggleMode}
               />
-            </View>
+            </Animated.View>
           </View>
         </Modal>
       ) : null}
@@ -438,9 +450,10 @@ function createStyles(palette: ThemeColors) {
   return StyleSheet.create({
     app: { flex: 1, flexDirection: 'row', backgroundColor: palette.background },
     mobileApp: { flexDirection: 'column' },
+    sidebarFrame: { height: '100%', flexShrink: 0, overflow: 'hidden' },
     sidebar: {
-      width: 248,
-      flexShrink: 0,
+      width: '100%',
+      flex: 1,
       paddingHorizontal: 17,
       paddingTop: 22,
       paddingBottom: 15,
@@ -448,7 +461,7 @@ function createStyles(palette: ThemeColors) {
       borderRightWidth: 1,
       borderRightColor: palette.line,
     },
-    sidebarCollapsed: { width: 76, paddingHorizontal: 9 },
+    sidebarCollapsed: { paddingHorizontal: 9 },
     sidebarBrandRow: { minHeight: 46, flexDirection: 'row', alignItems: 'flex-start', marginBottom: 30 },
     sidebarBrandRowCollapsed: { justifyContent: 'center' },
     collapseButton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.surfaceSubtle },
@@ -500,8 +513,7 @@ function createStyles(palette: ThemeColors) {
     mobileUserText: { color: palette.dirtyOrange, fontSize: 10, fontFamily: fontFamilies.bold },
     mobileMenuBackdrop: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(33, 29, 26, 0.36)' },
     menuDismiss: { flex: 1 },
-    mobileMenu: { width: 260, maxWidth: '84%', backgroundColor: palette.paper },
-    mobileMenuCollapsed: { width: 76 },
+    mobileMenu: { maxWidth: '84%', height: '100%', flexShrink: 0, overflow: 'hidden', backgroundColor: palette.paper },
     gatePage: { flex: 1, backgroundColor: palette.background },
     gateScroll: { flexGrow: 1, justifyContent: 'center', padding: 20 },
     gateCard: { width: '100%', maxWidth: 500, alignSelf: 'center', padding: 25, borderWidth: 1, borderColor: palette.line, borderRadius: 22, backgroundColor: palette.paper },

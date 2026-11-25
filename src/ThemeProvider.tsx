@@ -1,11 +1,21 @@
 import * as SecureStore from 'expo-secure-store';
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { Platform } from 'react-native';
+import {
+  createContext,
+  PropsWithChildren,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { Animated, Platform } from 'react-native';
 import { getThemeColors, ThemeColors, ThemeMode } from './theme';
 
 type ThemeContextValue = {
   mode: ThemeMode;
   palette: ThemeColors;
+  transitionOpacity: Animated.Value;
   toggleMode: () => void;
 };
 
@@ -29,6 +39,8 @@ async function saveMode(mode: ThemeMode) {
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const [mode, setMode] = useState<ThemeMode>('light');
+  const [transitionOpacity] = useState(() => new Animated.Value(1));
+  const transitionInProgress = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -44,17 +56,44 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const value = useMemo<ThemeContextValue>(() => ({
-    mode,
-    palette: getThemeColors(mode),
-    toggleMode: () => {
+  useEffect(() => () => transitionOpacity.stopAnimation(), [transitionOpacity]);
+
+  const toggleMode = useCallback(() => {
+    if (transitionInProgress.current) return;
+    transitionInProgress.current = true;
+
+    Animated.timing(transitionOpacity, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) {
+        transitionInProgress.current = false;
+        return;
+      }
+
       const nextMode = mode === 'light' ? 'dark' : 'light';
       setMode(nextMode);
       saveMode(nextMode).catch((error: unknown) => {
         console.error('Unable to save the appearance preference.', error);
       });
-    },
-  }), [mode]);
+
+      Animated.timing(transitionOpacity, {
+        toValue: 1,
+        duration: 240,
+        useNativeDriver: true,
+      }).start(() => {
+        transitionInProgress.current = false;
+      });
+    });
+  }, [mode, transitionOpacity]);
+
+  const value = useMemo<ThemeContextValue>(() => ({
+    mode,
+    palette: getThemeColors(mode),
+    transitionOpacity,
+    toggleMode,
+  }), [mode, toggleMode, transitionOpacity]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

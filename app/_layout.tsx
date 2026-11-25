@@ -5,7 +5,7 @@ import { Poppins_400Regular } from '@expo-google-fonts/poppins/400Regular';
 import { Poppins_500Medium } from '@expo-google-fonts/poppins/500Medium';
 import { Poppins_600SemiBold } from '@expo-google-fonts/poppins/600SemiBold';
 import { Poppins_700Bold } from '@expo-google-fonts/poppins/700Bold';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native';
 import { useEffect } from 'react';
 import { AuthProvider } from '../src/auth/AuthProvider';
 import { ThemeProvider, useAppTheme } from '../src/ThemeProvider';
@@ -43,16 +43,20 @@ export default function RootLayout() {
 }
 
 function RootStack() {
-  const { mode } = useAppTheme();
+  const { mode, palette, transitionOpacity } = useAppTheme();
   return (
-    <>
+    <View style={[styles.app, { backgroundColor: palette.background }]}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
-    </>
+      <Animated.View style={[styles.stack, { opacity: transitionOpacity }]}>
+        <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  app: { flex: 1 },
+  stack: { flex: 1 },
   loading: {
     flex: 1,
     alignItems: 'center',
