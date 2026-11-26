@@ -1,4 +1,13 @@
 import { Redirect, useRouter } from 'expo-router';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import LayoutDashboard from 'lucide-react-native/icons/layout-dashboard';
+import LogOut from 'lucide-react-native/icons/log-out';
+import Menu from 'lucide-react-native/icons/menu';
+import Moon from 'lucide-react-native/icons/moon';
+import Package from 'lucide-react-native/icons/package';
+import Sun from 'lucide-react-native/icons/sun';
+import UsersRound from 'lucide-react-native/icons/users-round';
 import { useEffect, useState } from 'react';
 import {
   Animated,
@@ -163,7 +172,9 @@ export default function HomeScreen() {
             onPress={toggleMode}
             style={({ pressed }) => [styles.themeToggle, pressed && styles.navPressed]}
           >
-            <Text style={styles.themeToggleIcon}>{mode === 'light' ? '☾' : '☀'}</Text>
+            {mode === 'light'
+              ? <Moon size={18} color={palette.dirtyOrange} strokeWidth={1.9} />
+              : <Sun size={18} color={palette.dirtyOrange} strokeWidth={1.9} />}
           </Pressable>
         </View>
 
@@ -239,7 +250,7 @@ function MobileHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
   return (
     <View style={styles.mobileHeader}>
       <Pressable accessibilityRole="button" accessibilityLabel="Open navigation" onPress={onOpenMenu} style={styles.menuButton}>
-        <Text style={styles.menuButtonText}>☰</Text>
+        <Menu size={19} color={palette.dirtyOrange} strokeWidth={2} />
       </Pressable>
       <Brand compact />
     </View>
@@ -298,26 +309,28 @@ function Sidebar({
           onPress={onToggleCollapsed}
           style={({ pressed }) => [styles.collapseButton, pressed && styles.navPressed]}
         >
-          <Text style={styles.collapseButtonText}>{collapsed ? '›' : '‹'}</Text>
+          {collapsed
+            ? <ChevronRight size={17} color={palette.muted} strokeWidth={2} />
+            : <ChevronLeft size={17} color={palette.muted} strokeWidth={2} />}
         </Pressable>
       </View>
       {!collapsed ? <Text style={styles.navCaption}>WORKSPACE</Text> : null}
       <NavButton
-        icon="⌂"
+        icon={LayoutDashboard}
         label="Dashboard"
         collapsed={collapsed}
         selected={section === 'dashboard'}
         onPress={() => onNavigate('dashboard')}
       />
       <NavButton
-        icon="▦"
+        icon={Package}
         label="Inventory"
         collapsed={collapsed}
         selected={section === 'inventory'}
         onPress={() => onNavigate('inventory')}
       />
       <NavButton
-        icon="♙"
+        icon={UsersRound}
         label="User management"
         collapsed={collapsed}
         selected={section === 'users'}
@@ -348,7 +361,10 @@ function Sidebar({
           ]}
         >
           {busy ? <LoadingAnimation size={18} /> : (
-            <Text style={styles.logoutText}>{collapsed ? '↪' : '↪  Sign out'}</Text>
+            <View style={styles.logoutContent}>
+              <LogOut size={15} color={palette.muted} strokeWidth={1.9} />
+              {!collapsed ? <Text style={styles.logoutText}>Sign out</Text> : null}
+            </View>
           )}
         </Pressable>
       </View>
@@ -357,13 +373,13 @@ function Sidebar({
 }
 
 function NavButton({
-  icon,
+  icon: Icon,
   label,
   selected,
   onPress,
   collapsed,
 }: {
-  icon: string;
+  icon: typeof LayoutDashboard;
   label: string;
   selected: boolean;
   onPress: () => void;
@@ -384,7 +400,11 @@ function NavButton({
         pressed && styles.navPressed,
       ]}
     >
-      <Text style={[styles.navIcon, selected && styles.navIconSelected]}>{icon}</Text>
+      <Icon
+        size={18}
+        color={selected ? palette.pumpkinOrange : palette.muted}
+        strokeWidth={selected ? 2.2 : 1.8}
+      />
       {!collapsed ? <Text style={[styles.navText, selected && styles.navTextSelected]}>{label}</Text> : null}
       {selected ? <View style={styles.navIndicator} /> : null}
     </Pressable>
@@ -466,7 +486,6 @@ function createStyles(palette: ThemeColors) {
     sidebarBrandRow: { minHeight: 46, flexDirection: 'row', alignItems: 'flex-start', marginBottom: 30 },
     sidebarBrandRowCollapsed: { justifyContent: 'center' },
     collapseButton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.surfaceSubtle },
-    collapseButtonText: { color: palette.muted, fontSize: 20, lineHeight: 22, fontFamily: fontFamilies.medium },
     brand: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4 },
     brandCompact: { marginBottom: 0 },
     brandIcon: { width: 37, height: 37, borderRadius: 13 },
@@ -477,8 +496,6 @@ function createStyles(palette: ThemeColors) {
     collapsedNavButton: { justifyContent: 'center', paddingHorizontal: 0 },
     navSelected: { backgroundColor: palette.accentSoft },
     navPressed: { opacity: 0.78 },
-    navIcon: { width: 19, textAlign: 'center', color: palette.muted, fontSize: 15 },
-    navIconSelected: { color: palette.pumpkinOrange },
     navText: { flex: 1, color: palette.muted, fontSize: 10, fontFamily: fontFamilies.medium },
     navTextSelected: { color: palette.dirtyOrange, fontFamily: fontFamilies.semiBold },
     navIndicator: { width: 3, height: 24, borderRadius: 2, position: 'absolute', right: 0, backgroundColor: palette.pumpkinOrange },
@@ -493,6 +510,7 @@ function createStyles(palette: ThemeColors) {
     logoutButton: { minHeight: 36, justifyContent: 'center', marginTop: 10, paddingHorizontal: 10, borderRadius: 8 },
     collapsedLogoutButton: { alignItems: 'center', paddingHorizontal: 0 },
     logoutPressed: { backgroundColor: palette.surfaceSubtle },
+    logoutContent: { flexDirection: 'row', alignItems: 'center', gap: 9 },
     logoutText: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium },
     main: { flex: 1, minWidth: 0, backgroundColor: palette.background },
     topbar: { minHeight: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 26, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper },
@@ -505,7 +523,6 @@ function createStyles(palette: ThemeColors) {
     footer: { color: palette.muted, fontSize: 8, textAlign: 'center', fontFamily: fontFamilies.regular, marginTop: 2 },
     mobileHeader: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper },
     menuButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: palette.accentSoft },
-    menuButtonText: { color: palette.dirtyOrange, fontSize: 16 },
     mobileMenuBackdrop: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(33, 29, 26, 0.36)' },
     menuDismiss: { flex: 1 },
     mobileMenu: { maxWidth: '84%', height: '100%', flexShrink: 0, overflow: 'hidden', backgroundColor: palette.paper },

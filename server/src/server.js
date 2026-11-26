@@ -1,42 +1,69 @@
 import 'dotenv/config';
 import { Buffer } from 'node:buffer';
-import crypto from 'node:crypto';
-import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
+import { ActivityLog } from './models/ActivityLog.js';
 import { app } from './app.js';
+import { InventoryItem } from './models/InventoryItem.js';
+import { StockMovement } from './models/StockMovement.js';
 import { User } from './models/User.js';
 
 const port = Number(process.env.PORT ?? 4000);
 const accessSecret = process.env.JWT_ACCESS_SECRET;
-const PASSWORD_HASH_ROUNDS = 12;
 
-async function ensureSuperadmin() {
-  if (await User.exists({ role: 'superadmin' })) {
-    return;
+async function migrateAccountOwnership() {
+  const primarySuperadmin = await User.findOne({ role: 'superadmin' }).sort({ createdAt: 1, _id: 1 });
+  const unassignedUsers = await User.find({ accountId: { $exists: false } });
+  const unassignedItems = await InventoryItem.exists({ accountId: { $exists: false } });
+  const unassignedMovements = await StockMovement.exists({ accountId: { $exists: false } });
+  const unassignedActivities = await ActivityLog.exists({ accountId: { $exists: false } });
+
+  if (
+    !primarySuperadmin &&
+    (unassignedUsers.length > 0 || unassignedItems || unassignedMovements || unassignedActivities)
+  ) {
+    throw new Error(
+      'Existing records do not have an account owner. Restore a legacy Super Admin before starting the API.',
+    );
   }
 
-  const email = `admin-${crypto.randomBytes(6).toString('hex')}@stockmate.local`;
-  const password = crypto.randomBytes(24).toString('base64url');
-  const passwordHash = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
-
-  try {
-    await User.create({
-      name: 'StockMate Administrator',
-      email,
-      passwordHash,
-      role: 'superadmin',
-      mustChangeCredentials: true,
-    });
-  } catch (error) {
-    if (error?.code === 11000 && (await User.exists({ role: 'superadmin' }))) {
-      return;
-    }
-    throw error;
+  for (const user of unassignedUsers) {
+    user.accountId =
+      user.role === 'superadmin' ? user._id : primarySuperadmin._id;
+    await user.save();
   }
 
-  console.info('A first-use StockMate superadmin was created. Change both credentials after signing in:');
-  console.info(`Email: ${email}`);
-  console.info(`Password: ${password}`);
+  if (!primarySuperadmin) return;
+
+  await Promise.all([
+    InventoryItem.updateMany(
+      { accountId: { $exists: false } },
+      { $set: { accountId: primarySuperadmin._id } },
+    ),
+    StockMovement.updateMany(
+      { accountId: { $exists: false } },
+      { $set: { accountId: primarySuperadmin._id } },
+    ),
+  ]);
+
+  const assignedUsers = await User.find({ accountId: { $exists: true } }).select('_id accountId');
+  const accountByUserId = new Map(assignedUsers.map((user) => [user.id, user.accountId]));
+  const unassignedLogActors = await ActivityLog.find({ accountId: { $exists: false } }).distinct('actorId');
+  const actorsByAccount = new Map();
+  for (const actorId of unassignedLogActors) {
+    const accountId = accountByUserId.get(actorId.toString()) ?? primarySuperadmin._id;
+    const key = accountId.toString();
+    const actors = actorsByAccount.get(key) ?? [];
+    actors.push(actorId);
+    actorsByAccount.set(key, actors);
+  }
+  await Promise.all(
+    [...actorsByAccount].map(([accountId, actorIds]) =>
+      ActivityLog.updateMany(
+        { accountId: { $exists: false }, actorId: { $in: actorIds } },
+        { $set: { accountId } },
+      ),
+    ),
+  );
 }
 
 if (!process.env.MONGODB_URI) {
@@ -51,7 +78,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 try {
   await mongoose.connect(process.env.MONGODB_URI);
-  await ensureSuperadmin();
+  await migrateAccountOwnership();
   app.listen(port, () => {
     console.log(`StockMate API listening on port ${port}.`);
   });

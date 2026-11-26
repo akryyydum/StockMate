@@ -53,15 +53,31 @@ export function AuthScreen() {
 
           <View style={styles.card}>
             <View style={styles.intro}>
-              <Text style={styles.eyebrow}>WELCOME BACK</Text>
-              <Text style={styles.heading}>Good to see you.</Text>
-              <Text style={styles.description}>Sign in to pick up right where you left off.</Text>
+              <Text style={styles.eyebrow}>{form.mode === 'register' ? 'CREATE YOUR ACCOUNT' : 'WELCOME BACK'}</Text>
+              <Text style={styles.heading}>{form.mode === 'register' ? 'Your inventory, your own.' : 'Good to see you.'}</Text>
+              <Text style={styles.description}>
+                {form.mode === 'register'
+                  ? 'Create a private workspace with your own Super Admin account.'
+                  : 'Sign in to pick up right where you left off.'}
+              </Text>
             </View>
 
             {form.startupError ? (
               <View accessibilityRole="alert" style={styles.notice}>
                 <Text style={styles.noticeText}>{form.startupError}</Text>
               </View>
+            ) : null}
+
+            {form.mode === 'register' ? (
+              <Field
+                label="Full name"
+                value={form.name}
+                onChangeText={form.setName}
+                placeholder="Your name"
+                autoComplete="name"
+                textContentType="name"
+                accessibilityLabel="Full name"
+              />
             ) : null}
 
             <Field
@@ -86,9 +102,10 @@ export function AuthScreen() {
               autoComplete="current-password"
               textContentType="password"
               accessibilityLabel="Password"
+              maxLength={128}
             />
 
-            <Pressable
+            {form.mode === 'login' ? <Pressable
               accessibilityRole="checkbox"
               accessibilityState={{ checked: form.showPassword }}
               onPress={() => form.setShowPassword((current) => !current)}
@@ -98,7 +115,7 @@ export function AuthScreen() {
                 {form.showPassword ? <Text style={styles.checkmark}>✓</Text> : null}
               </View>
               <Text style={styles.showPasswordText}>Show password</Text>
-            </Pressable>
+            </Pressable> : null}
 
             {form.error ? (
               <Text accessibilityRole="alert" style={styles.error}>
@@ -119,8 +136,20 @@ export function AuthScreen() {
               {form.busy ? (
                 <LoadingAnimation size={22} />
               ) : (
-                <Text style={styles.submitText}>Sign in to StockMate</Text>
+                <Text style={styles.submitText}>
+                  {form.mode === 'register' ? 'Create Super Admin account' : 'Sign in to StockMate'}
+                </Text>
               )}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={form.busy}
+              onPress={() => form.setMode(form.mode === 'login' ? 'register' : 'login')}
+              style={styles.modeToggle}
+            >
+              <Text style={styles.modeToggleText}>
+                {form.mode === 'register' ? 'Already have an account? Sign in' : 'New to StockMate? Register'}
+              </Text>
             </Pressable>
           </View>
 
@@ -142,8 +171,9 @@ type FieldProps = {
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address';
   autoCapitalize?: 'none' | 'sentences';
-  autoComplete?: 'email' | 'current-password';
-  textContentType?: 'emailAddress' | 'password';
+  autoComplete?: 'email' | 'current-password' | 'name';
+  textContentType?: 'emailAddress' | 'password' | 'name';
+  maxLength?: number;
 };
 
 function Field({
@@ -157,6 +187,7 @@ function Field({
   autoCapitalize = 'sentences',
   autoComplete,
   textContentType,
+  maxLength,
 }: FieldProps) {
   return (
     <View style={styles.field}>
@@ -166,6 +197,7 @@ function Field({
         autoCapitalize={autoCapitalize}
         autoComplete={autoComplete}
         keyboardType={keyboardType}
+        maxLength={maxLength}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor="#938b82"
@@ -299,6 +331,8 @@ const styles = StyleSheet.create({
   submitPressed: { opacity: 0.86 },
   submitDisabled: { opacity: 0.7 },
   submitText: { color: colors.ink, fontSize: 13, fontFamily: fontFamilies.bold },
+  modeToggle: { alignSelf: 'center', padding: 8, marginTop: 6 },
+  modeToggleText: { color: colors.dirtyOrange, fontSize: 11, fontFamily: fontFamilies.semiBold },
   securityText: {
     color: colors.muted,
     textAlign: 'center',

@@ -31,7 +31,6 @@ export function UserManagement({ accessToken, role, currentUserId }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'superadmin'>('admin');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
@@ -71,7 +70,6 @@ export function UserManagement({ accessToken, role, currentUserId }: Props) {
         name: name.trim(),
         email: email.trim(),
         password,
-        role: newRole,
       });
       setUsers((current) => [...current, user].sort((a, b) => a.name.localeCompare(b.name)));
       setName('');
@@ -204,18 +202,13 @@ export function UserManagement({ accessToken, role, currentUserId }: Props) {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Add a team member</Text>
           <Text style={styles.cardSubtitle}>
-            Admins can use inventory. Superadmins can manage users and inventory.
+            Team members receive Admin access to this account&apos;s private inventory.
           </Text>
           <View style={styles.formGrid}>
             <Field label="Full name" value={name} onChangeText={setName} placeholder="e.g. Alex Rivera" />
             <Field label="Email address" value={email} onChangeText={setEmail} placeholder="alex@example.com" autoCapitalize="none" />
             <Field label="Initial password (12+ characters)" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" />
             <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry autoCapitalize="none" />
-          </View>
-          <Text style={styles.label}>Access level</Text>
-          <View style={styles.rolePicker}>
-            <RoleOption label="Admin" detail="Inventory access" selected={newRole === 'admin'} onPress={() => setNewRole('admin')} />
-            <RoleOption label="Superadmin" detail="Manage users" selected={newRole === 'superadmin'} onPress={() => setNewRole('superadmin')} />
           </View>
           <Pressable
             accessibilityRole="button"
@@ -344,32 +337,6 @@ function Field({
   );
 }
 
-function RoleOption({
-  label,
-  detail,
-  selected,
-  onPress,
-}: {
-  label: string;
-  detail: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  const { palette } = useAppTheme();
-  const styles = createStyles(palette);
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.roleOption, selected && styles.roleOptionSelected]}
-    >
-      <Text style={styles.roleOptionTitle}>{label}</Text>
-      <Text style={styles.roleOptionDetail}>{detail}</Text>
-    </Pressable>
-  );
-}
-
 function Feedback({ text, danger = false }: { text: string; danger?: boolean }) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
@@ -451,11 +418,6 @@ function createStyles(palette: ThemeColors) {
   field: { flexGrow: 1, flexBasis: 230, marginBottom: 4 },
   label: { color: palette.ink, fontSize: 9, fontFamily: fontFamilies.semiBold, marginBottom: 6 },
   input: { height: 43, borderWidth: 1, borderColor: palette.line, borderRadius: 10, paddingHorizontal: 11, color: palette.ink, backgroundColor: palette.paper, fontSize: 10, fontFamily: fontFamilies.regular },
-  rolePicker: { flexDirection: 'row', gap: 10, marginTop: 8, marginBottom: 15 },
-  roleOption: { flex: 1, minHeight: 60, justifyContent: 'center', paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
-  roleOptionSelected: { borderColor: palette.pumpkinOrange, backgroundColor: palette.accentSoft },
-  roleOptionTitle: { color: palette.ink, fontSize: 10, fontFamily: fontFamilies.semiBold },
-  roleOptionDetail: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 3 },
   submitButton: { minHeight: 43, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, borderRadius: 12, backgroundColor: palette.pumpkinOrange },
   submitPressed: { opacity: 0.86 },
   submitText: { color: '#fff', fontSize: 10, fontFamily: fontFamilies.semiBold },

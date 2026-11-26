@@ -62,6 +62,12 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+const registerSchema = z.object({
+  name: z.string().trim().min(2).max(60),
+  email: emailSchema,
+  password: passwordSchema,
+});
+
 const credentialsSchema = z.object({
   currentPassword: z.string().min(1).max(128),
   email: emailSchema,
@@ -72,7 +78,6 @@ const createUserSchema = z.object({
   name: z.string().trim().min(2).max(60),
   email: emailSchema,
   password: passwordSchema,
-  role: z.enum(['admin', 'superadmin']),
 });
 
 const updateUserSchema = z.object({
@@ -100,6 +105,10 @@ const stockMovementSchema = z.object({
 
 const refreshSchema = z.object({
   refreshToken: z.string().min(40).max(200).nullable().optional(),
+});
+
+const activityPageSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
 });
 
 function publicUser(user) {
@@ -135,6 +144,7 @@ function publicInventoryItem(item) {
 
 function recordActivity(actor, type, details = {}) {
   return ActivityLog.create({
+    accountId: actor.accountId,
     actorId: actor.id,
     actorName: actor.name,
     actorRole: actor.role,
@@ -243,6 +253,33 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.post('/api/auth/register', authRateLimit, async (req, res) => {
+  const input = validate(registerSchema, req.body, res);
+  if (!input) return;
+
+  const user = new User({
+    ...input,
+    passwordHash: await bcrypt.hash(input.password, PASSWORD_HASH_ROUNDS),
+    role: 'superadmin',
+  });
+  user.accountId = user._id;
+
+  try {
+    await user.save();
+    const session = await createSession(user);
+    res.status(201).json(session);
+  } catch (error) {
+    if (user.isNew === false) {
+      await User.deleteOne({ _id: user.id });
+    }
+    if (error?.code === 11000) {
+      res.status(409).json({ message: 'An account with that email already exists.' });
+      return;
+    }
+    throw error;
+  }
+});
+
 app.post('/api/auth/login', authRateLimit, async (req, res) => {
   const input = validate(loginSchema, req.body, res);
   if (!input) return;
@@ -339,8 +376,8 @@ app.get(
   requireAccessToken,
   requireCurrentUser,
   requireUpdatedCredentials,
-  async (_req, res) => {
-    const users = await User.find()
+  async (req, res) => {
+    const users = await User.find({ accountId: req.authUser.accountId })
       .select('name email role mustChangeCredentials')
       .sort({ createdAt: 1 });
     res.json({ users: users.map(publicUser) });
@@ -361,7 +398,12 @@ app.post(
     const { password, ...userInput } = input;
     const passwordHash = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
     try {
-      const user = await User.create({ ...userInput, passwordHash });
+      const user = await User.create({
+        ...userInput,
+        passwordHash,
+        role: 'admin',
+        accountId: req.authUser.accountId,
+      });
       try {
         await recordActivity(req.authUser, 'user_created', { targetName: user.name });
       } catch (error) {
@@ -393,7 +435,10 @@ app.patch(
       return;
     }
 
-    const user = await User.findById(req.params.userId).select('+passwordHash');
+    const user = await User.findOne({
+      _id: req.params.userId,
+      accountId: req.authUser.accountId,
+    }).select('+passwordHash');
     if (!user) {
       res.status(404).json({ message: 'User account not found.' });
       return;
@@ -437,13 +482,16 @@ app.delete(
       return;
     }
 
-    const user = await User.findById(req.params.userId);
+    const user = await User.findOne({
+      _id: req.params.userId,
+      accountId: req.authUser.accountId,
+    });
     if (!user) {
       res.status(404).json({ message: 'User account not found.' });
       return;
     }
-    if (user.role === 'superadmin' && await User.countDocuments({ role: 'superadmin' }) <= 1) {
-      res.status(400).json({ message: 'The last superadmin account cannot be removed.' });
+    if (user.role === 'superadmin') {
+      res.status(400).json({ message: 'A Super Admin account cannot be removed from team management.' });
       return;
     }
 
@@ -456,24 +504,65 @@ app.delete(
 );
 
 app.get(
+  '/api/activities',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  async (req, res) => {
+    const input = validate(activityPageSchema, req.query, res);
+    if (!input) return;
+
+    const filter = { accountId: req.authUser.accountId };
+    const pageSize = 10;
+    const [activities, total] = await Promise.all([
+      ActivityLog.find(filter)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip((input.page - 1) * pageSize)
+        .limit(pageSize)
+        .select('actorName actorRole type itemName targetName quantity unit createdAt'),
+      ActivityLog.countDocuments(filter),
+    ]);
+
+    res.json({
+      activities: activities.map((activity) => ({
+        id: activity.id,
+        actorName: activity.actorName,
+        actorRole: activity.actorRole,
+        type: activity.type,
+        itemName: activity.itemName ?? null,
+        targetName: activity.targetName ?? null,
+        quantity: activity.quantity ?? null,
+        unit: activity.unit ?? null,
+        createdAt: activity.createdAt,
+      })),
+      page: input.page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    });
+  },
+);
+
+app.get(
   '/api/dashboard',
   requireAccessToken,
   requireCurrentUser,
   requireUpdatedCredentials,
-  async (_req, res) => {
+  async (req, res) => {
     const now = new Date();
     const today = new Date(now);
     today.setUTCHours(0, 0, 0, 0);
     const weekStart = new Date(today);
     weekStart.setUTCDate(weekStart.getUTCDate() - 6);
-    const [items, movements, activities, activeUsers, newItemsThisWeek] = await Promise.all([
-      InventoryItem.find().select('quantity minimumStock unitCost createdAt'),
-      StockMovement.find({ createdAt: { $gte: weekStart } }).select('type createdAt'),
-      ActivityLog.find().sort({ createdAt: -1 }).limit(25).select(
+    const [items, movements, activities, activityTotal, activeUsers, newItemsThisWeek] = await Promise.all([
+      InventoryItem.find({ accountId: req.authUser.accountId }).select('quantity minimumStock unitCost createdAt'),
+      StockMovement.find({ accountId: req.authUser.accountId, createdAt: { $gte: weekStart } }).select('type createdAt'),
+      ActivityLog.find({ accountId: req.authUser.accountId }).sort({ createdAt: -1, _id: -1 }).limit(2).select(
         'actorName actorRole type itemName targetName quantity unit createdAt',
       ),
-      User.countDocuments(),
-      InventoryItem.countDocuments({ createdAt: { $gte: weekStart } }),
+      ActivityLog.countDocuments({ accountId: req.authUser.accountId }),
+      User.countDocuments({ accountId: req.authUser.accountId }),
+      InventoryItem.countDocuments({ accountId: req.authUser.accountId, createdAt: { $gte: weekStart } }),
     ]);
     const dailyMovements = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(weekStart);
@@ -526,6 +615,7 @@ app.get(
         unit: activity.unit ?? null,
         createdAt: activity.createdAt,
       })),
+      activityTotal,
       dailyMovements,
     });
   },
@@ -536,10 +626,11 @@ app.get(
   requireAccessToken,
   requireCurrentUser,
   requireUpdatedCredentials,
-  async (_req, res) => {
+  async (req, res) => {
     const [items, todayMovements] = await Promise.all([
-      InventoryItem.find().sort({ name: 1 }),
+      InventoryItem.find({ accountId: req.authUser.accountId }).sort({ name: 1 }),
       StockMovement.find({
+        accountId: req.authUser.accountId,
         createdAt: { $gte: new Date(new Date().setUTCHours(0, 0, 0, 0)) },
       }).select('createdAt'),
     ]);
@@ -575,7 +666,10 @@ app.post(
   async (req, res) => {
     const input = validate(inventoryItemSchema, req.body, res);
     if (!input) return;
-    const item = await InventoryItem.create(input);
+    const item = await InventoryItem.create({
+      ...input,
+      accountId: req.authUser.accountId,
+    });
     try {
       await recordActivity(req.authUser, 'inventory_created', { itemName: item.name });
     } catch (error) {
@@ -598,7 +692,10 @@ app.patch(
     }
     const input = validate(updateInventoryItemSchema, req.body, res);
     if (!input) return;
-    const item = await InventoryItem.findById(req.params.itemId);
+    const item = await InventoryItem.findOne({
+      _id: req.params.itemId,
+      accountId: req.authUser.accountId,
+    });
     if (!item) {
       res.status(404).json({ message: 'Inventory item not found.' });
       return;
@@ -620,6 +717,7 @@ app.patch(
       try {
         movement = await StockMovement.create({
           itemId: item.id,
+          accountId: req.authUser.accountId,
           type: quantityDifference > 0 ? 'in' : 'out',
           quantity: Math.abs(quantityDifference),
           performedBy: req.authUserId,
@@ -667,11 +765,14 @@ app.post(
         : { $inc: { quantity: -input.quantity } };
     const filter =
       input.type === 'in'
-        ? { _id: req.params.itemId }
-        : { _id: req.params.itemId, quantity: { $gte: input.quantity } };
+        ? { _id: req.params.itemId, accountId: req.authUser.accountId }
+        : { _id: req.params.itemId, accountId: req.authUser.accountId, quantity: { $gte: input.quantity } };
     const item = await InventoryItem.findOneAndUpdate(filter, update, { new: true });
     if (!item) {
-      const exists = await InventoryItem.exists({ _id: req.params.itemId });
+      const exists = await InventoryItem.exists({
+        _id: req.params.itemId,
+        accountId: req.authUser.accountId,
+      });
       res.status(exists ? 400 : 404).json({
         message: exists ? 'There is not enough stock for that movement.' : 'Inventory item not found.',
       });
@@ -681,6 +782,7 @@ app.post(
     try {
       const movement = await StockMovement.create({
         itemId: item.id,
+        accountId: req.authUser.accountId,
         type: input.type,
         quantity: input.quantity,
         performedBy: req.authUserId,
@@ -700,7 +802,10 @@ app.post(
         input.type === 'in'
           ? { $inc: { quantity: -input.quantity } }
           : { $inc: { quantity: input.quantity } };
-      await InventoryItem.updateOne({ _id: item.id }, rollback);
+      await InventoryItem.updateOne(
+        { _id: item.id, accountId: req.authUser.accountId },
+        rollback,
+      );
       throw error;
     }
 

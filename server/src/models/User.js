@@ -17,6 +17,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: 254,
     },
+    accountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
     passwordHash: {
       type: String,
       required: true,
@@ -36,5 +42,7 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+userSchema.index({ accountId: 1, createdAt: 1 });
 
 export const User = mongoose.model('User', userSchema);

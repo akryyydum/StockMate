@@ -2,6 +2,12 @@ import mongoose from 'mongoose';
 
 const activityLogSchema = new mongoose.Schema(
   {
+    accountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
     actorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -56,5 +62,6 @@ const activityLogSchema = new mongoose.Schema(
 );
 
 activityLogSchema.index({ createdAt: -1 });
+activityLogSchema.index({ accountId: 1, createdAt: -1 });
 
 export const ActivityLog = mongoose.model('ActivityLog', activityLogSchema);

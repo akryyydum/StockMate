@@ -113,7 +113,7 @@ export function AuthScreen() {
           </div>
         </section>
 
-        <section className="form-panel" aria-label="Sign in">
+        <section className="form-panel" aria-label={form.mode === 'register' ? 'Register' : 'Sign in'}>
           <div className="mobile-wordmark">
             <StockMateMark />
             <span className="wordmark-copy">
@@ -123,18 +123,37 @@ export function AuthScreen() {
           </div>
           <div className="form-content">
             <div className="form-topline">
-              <span className="form-kicker">WELCOME BACK</span>
+              <span className="form-kicker">{form.mode === 'register' ? 'CREATE YOUR ACCOUNT' : 'WELCOME BACK'}</span>
               <span className="secure-label"><span aria-hidden="true">✦</span> SECURE ACCESS</span>
             </div>
 
-            <h2>Good to see you.</h2>
-            <p className="form-intro">Sign in and get back to what you do best.</p>
+            <h2>{form.mode === 'register' ? 'Your inventory, your own.' : 'Good to see you.'}</h2>
+            <p className="form-intro">
+              {form.mode === 'register'
+                ? 'Create a private workspace with your own Super Admin account.'
+                : 'Sign in and get back to what you do best.'}
+            </p>
 
             {form.startupError ? (
               <div className="form-notice" role="alert">{form.startupError}</div>
             ) : null}
 
             <form className="auth-form" onSubmit={handleSubmit}>
+              {form.mode === 'register' ? (
+                <div className="field-group">
+                  <label htmlFor="name">Full name</label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={form.name}
+                    onChange={(event) => form.setName(event.target.value)}
+                    placeholder="Your name"
+                    autoComplete="name"
+                    maxLength={60}
+                    required
+                  />
+                </div>
+              ) : null}
               <div className="field-group">
                 <label htmlFor="email">Email address</label>
                 <div className="input-wrap">
@@ -178,6 +197,7 @@ export function AuthScreen() {
                     autoComplete="current-password"
                     autoCapitalize="none"
                     maxLength={128}
+                    minLength={form.mode === 'register' ? 12 : undefined}
                     required
                   />
                   <button
@@ -201,12 +221,21 @@ export function AuthScreen() {
                   </>
                 ) : (
                   <>
-                    Sign in to StockMate
+                    {form.mode === 'register' ? 'Create Super Admin account' : 'Sign in to StockMate'}
                     <span className="button-arrow" aria-hidden="true">↗</span>
                   </>
                 )}
               </Button>
             </form>
+
+            <button
+              className="auth-mode-toggle"
+              type="button"
+              disabled={form.busy}
+              onClick={() => form.setMode(form.mode === 'login' ? 'register' : 'login')}
+            >
+              {form.mode === 'register' ? 'Already have an account? Sign in' : 'New to StockMate? Register'}
+            </button>
 
             <div className="form-divider"><span>MADE FOR PEACE OF MIND</span></div>
             <div className="form-footnote">

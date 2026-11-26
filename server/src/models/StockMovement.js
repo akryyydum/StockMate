@@ -2,6 +2,12 @@ import mongoose from 'mongoose';
 
 const stockMovementSchema = new mongoose.Schema(
   {
+    accountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
     itemId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'InventoryItem',
@@ -28,5 +34,6 @@ const stockMovementSchema = new mongoose.Schema(
 );
 
 stockMovementSchema.index({ createdAt: 1 });
+stockMovementSchema.index({ accountId: 1, createdAt: 1 });
 
 export const StockMovement = mongoose.model('StockMovement', stockMovementSchema);

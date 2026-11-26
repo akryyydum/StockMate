@@ -31,7 +31,7 @@ The interface uses the brand-board palette (bone white `#ededef`, burnt yellow `
    npm run api:dev
    ```
 
-   If the database has no superadmin, startup creates one with a random email and password and prints them once in the API terminal. Sign in with those credentials and change both immediately. Restrict access to production server logs because they contain this one-time bootstrap password.
+   The first user creates an account from the app's Register screen. Each registration becomes that account's Super Admin and starts with an empty private inventory.
 
 4. In a separate terminal, copy `.env.example` to `.env`. Set `EXPO_PUBLIC_API_URL` to the reachable API base URL, then start the app:
 
@@ -66,8 +66,9 @@ Deploy the generated `dist/` directory to a static host over HTTPS. On supported
 
 ## Authentication and security
 
-- Public registration is disabled. A first-use superadmin is bootstrapped only if the database has no superadmin; only superadmins can create admin or superadmin accounts. Admins can view the user list but cannot create accounts. Authorization is enforced by the API.
-- The generated superadmin must change both its email address and password before using user management. Changing these credentials revokes all refresh sessions for that account.
+- Registration is public and rate-limited. Each registration creates a Super Admin and uses its user ID as the owner of an isolated account. Team members created from user management are always Admins in that same account; only the separate registration flow can create another independent Super Admin account.
+- Users, inventory items, stock movements, and activity records carry an account owner ID. API reads, updates, deletes, dashboard aggregates, and related record creation are scoped to the authenticated user's account, so changing a request ID cannot cross account boundaries.
+- On startup, records from older installations that do not yet have an account owner are assigned to the oldest existing Super Admin's account. Existing Super Admin users are assigned their own account; their legacy shared records remain with the oldest Super Admin.
 - Passwords are validated by the API, hashed with bcrypt, and password hashes are never returned.
 - Access JWTs expire after 15 minutes. Random 30-day refresh tokens are stored as SHA-256 hashes in MongoDB, rotated on refresh, and removed on logout. MongoDB expires old refresh-token records with a TTL index.
 - On Android, the refresh token is stored using Expo SecureStore (Android Keystore-backed). On web, tokens stay in memory and are not persisted across a page reload.
@@ -79,7 +80,7 @@ Deploy the generated `dist/` directory to a static host over HTTPS. On supported
 - The authenticated dashboard tracks café products, categories, units, quantity on hand, minimum stock, unit cost, and stock value in PHP.
 - Inventory status is calculated from on-hand quantity and the minimum stock level. Stock-in and stock-out actions update quantities and are recorded as dated movements.
 - Dashboard cards and the seven-day stock-movement chart are calculated from stored inventory and movement records. User management is available separately from the responsive sidebar.
-- The dashboard summarizes inventory health, stock value, team size, and today's movements, and shows recent sign-ins, user creation, item changes, and stock changes from persisted activity records.
+- The dashboard summarizes inventory health, stock value, team size, and today's movements. Recent activity shows the two latest account events; View all opens day-grouped history with ten records per page.
 - The signed-in interface includes a light/dark mode toggle and a collapsible sidebar. The selected appearance is saved locally on each platform.
 
 This is an inventory and authentication starter, not a complete production platform. Add email verification, password reset, monitoring, backups, and deployment-specific proxy/rate-limit configuration before a public launch.

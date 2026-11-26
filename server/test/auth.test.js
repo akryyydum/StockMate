@@ -6,6 +6,10 @@ process.env.JWT_ACCESS_SECRET = 'test-secret-that-is-long-enough-for-jwt-signing
 process.env.CORS_ORIGINS = 'http://localhost:8081';
 
 const { app } = await import('../src/app.js');
+const { ActivityLog } = await import('../src/models/ActivityLog.js');
+const { InventoryItem } = await import('../src/models/InventoryItem.js');
+const { StockMovement } = await import('../src/models/StockMovement.js');
+const { User } = await import('../src/models/User.js');
 let server;
 let baseUrl;
 
@@ -21,13 +25,19 @@ after(async () => {
 });
 
 describe('authentication API input handling', () => {
+  it('requires account ownership on users and account data records', () => {
+    for (const model of [User, InventoryItem, StockMovement, ActivityLog]) {
+      assert.equal(model.schema.path('accountId').isRequired, true, `${model.modelName} requires accountId`);
+    }
+  });
+
   it('reports the health endpoint without connecting to MongoDB', async () => {
     const response = await fetch(`${baseUrl}/api/health`);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { status: 'ok' });
   });
 
-  it('does not expose a public registration endpoint', async () => {
+  it('exposes registration and rejects malformed registration input', async () => {
     const response = await fetch(`${baseUrl}/api/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -37,7 +47,10 @@ describe('authentication API input handling', () => {
         password: 'short',
       }),
     });
-    assert.equal(response.status, 404);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      message: 'Please check the information you entered.',
+    });
   });
 
   it('rejects malformed login input without revealing account details', async () => {
@@ -59,6 +72,11 @@ describe('authentication API input handling', () => {
 
   it('requires authentication to access user management', async () => {
     const response = await fetch(`${baseUrl}/api/users`);
+    assert.equal(response.status, 401);
+  });
+
+  it('requires authentication to read paginated activity history', async () => {
+    const response = await fetch(`${baseUrl}/api/activities?page=2`);
     assert.equal(response.status, 401);
   });
 

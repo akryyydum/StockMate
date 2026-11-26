@@ -2,6 +2,12 @@ import mongoose from 'mongoose';
 
 const inventoryItemSchema = new mongoose.Schema(
   {
+    accountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
     name: {
       type: String,
       required: true,
@@ -40,5 +46,7 @@ const inventoryItemSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+inventoryItemSchema.index({ accountId: 1, name: 1 });
 
 export const InventoryItem = mongoose.model('InventoryItem', inventoryItemSchema);

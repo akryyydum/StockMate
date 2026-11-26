@@ -23,6 +23,7 @@ type AuthContextValue = {
   accessToken: string | null;
   isLoading: boolean;
   startupError: string | null;
+  register: (name: string, email: string, password: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   updateCredentials: (
     currentPassword: string,
@@ -118,6 +119,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [acceptSession],
   );
 
+  const register = useCallback(
+    async (name: string, email: string, password: string) => {
+      const session = await authApi.register(name, email, password);
+      await acceptSession(session);
+    },
+    [acceptSession],
+  );
+
   const updateCredentials = useCallback(
     async (currentPassword: string, email: string, password: string) => {
       if (!accessToken) {
@@ -162,8 +171,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [refreshToken]);
 
   const value = useMemo(
-    () => ({ user, accessToken, isLoading, startupError, login, updateCredentials, logout }),
-    [user, accessToken, isLoading, startupError, login, updateCredentials, logout],
+    () => ({ user, accessToken, isLoading, startupError, register, login, updateCredentials, logout }),
+    [user, accessToken, isLoading, startupError, register, login, updateCredentials, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

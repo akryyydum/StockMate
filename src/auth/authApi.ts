@@ -6,7 +6,7 @@ export type User = {
   mustChangeCredentials: boolean;
 };
 
-export type NewUser = Pick<User, 'name' | 'email' | 'role'> & { password: string };
+export type NewUser = Pick<User, 'name' | 'email'> & { password: string };
 
 export type InventoryStatus = 'in-stock' | 'low-stock' | 'out-of-stock';
 
@@ -51,6 +51,14 @@ export type DashboardActivity = {
   createdAt: string;
 };
 
+export type ActivityPage = {
+  activities: DashboardActivity[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 export type DashboardOverview = {
   summary: {
     stockValue: number;
@@ -65,6 +73,7 @@ export type DashboardOverview = {
     newItemsThisWeek: number;
   };
   activities: DashboardActivity[];
+  activityTotal: number;
   dailyMovements: {
     date: string;
     label: string;
@@ -125,6 +134,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const authApi = {
+  register(name: string, email: string, password: string) {
+    return request<AuthSession>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    });
+  },
+
   login(email: string, password: string) {
     return request<AuthSession>('/auth/login', {
       method: 'POST',
@@ -197,6 +213,12 @@ export const authApi = {
   dashboard(accessToken: string) {
     return request<DashboardOverview>('/dashboard', {
       headers: { Authorization: 'Bearer ' + accessToken },
+    });
+  },
+
+  activities(accessToken: string, page: number) {
+    return request<ActivityPage>(`/activities?page=${encodeURIComponent(String(page))}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
   },
 

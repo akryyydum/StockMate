@@ -8,6 +8,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import ArrowDownUp from 'lucide-react-native/icons/arrow-down-up';
+import CircleAlert from 'lucide-react-native/icons/circle-alert';
+import Coffee from 'lucide-react-native/icons/coffee';
+import DollarSign from 'lucide-react-native/icons/dollar-sign';
+import Package from 'lucide-react-native/icons/package';
 import {
   authApi,
   InventoryItem,
@@ -241,28 +247,28 @@ export function InventoryDashboard({ accessToken }: Props) {
           label="Stock value"
           value={currency.format(summary.stockValue)}
           detail="Current inventory at cost"
-          icon="$"
+          icon={DollarSign}
           accent="dirty"
         />
         <MetricCard
           label="Low stock items"
           value={String(summary.lowStockItems)}
           detail={summary.outOfStockItems ? `${summary.outOfStockItems} out of stock` : 'At or below minimum'}
-          icon="!"
+          icon={CircleAlert}
           accent="yellow"
         />
         <MetricCard
           label="Total items"
           value={String(summary.totalItems)}
           detail={`${Math.max(0, summary.totalItems - summary.outOfStockItems)} with stock on hand`}
-          icon="▦"
+          icon={Package}
           accent="orange"
         />
         <MetricCard
           label="Movements today"
           value={String(summary.movementsToday)}
           detail="Stock ins and outs"
-          icon="↕"
+          icon={ArrowDownUp}
           accent="ink"
         />
       </View>
@@ -316,7 +322,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           </View>
         ) : filteredItems.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>☕</Text>
+            <Coffee size={29} color={palette.dirtyOrange} strokeWidth={1.7} />
             <Text style={styles.emptyTitle}>
               {items.length === 0 ? 'Your inventory starts here' : 'No items match those filters'}
             </Text>
@@ -462,13 +468,13 @@ function MetricCard({
   label,
   value,
   detail,
-  icon,
+  icon: Icon,
   accent,
 }: {
   label: string;
   value: string;
   detail: string;
-  icon: string;
+  icon: LucideIcon;
   accent: 'dirty' | 'yellow' | 'orange' | 'ink';
 }) {
   const { palette } = useAppTheme();
@@ -478,13 +484,20 @@ function MetricCard({
       <View style={styles.metricTop}>
         <Text style={styles.metricLabel}>{label}</Text>
         <View style={[styles.metricIcon, styles[`metricIcon_${accent}`]]}>
-          <Text style={[styles.metricIconText, styles[`metricText_${accent}`]]}>{icon}</Text>
+          <Icon size={16} color={metricIconColor(accent, palette)} strokeWidth={1.9} />
         </View>
       </View>
       <Text numberOfLines={1} adjustsFontSizeToFit style={styles.metricValue}>{value}</Text>
       <Text style={styles.metricDetail}>{detail}</Text>
     </View>
   );
+}
+
+function metricIconColor(accent: 'dirty' | 'yellow' | 'orange' | 'ink', palette: ThemeColors) {
+  if (accent === 'yellow') return palette.statusInText;
+  if (accent === 'orange') return palette.pumpkinOrange;
+  if (accent === 'ink') return palette.ink;
+  return palette.dirtyOrange;
 }
 
 function TableCell({
@@ -651,11 +664,6 @@ function createStyles(palette: ThemeColors) {
   metricIcon_yellow: { backgroundColor: palette.yellowSoft },
   metricIcon_orange: { backgroundColor: palette.orangeSoft },
   metricIcon_ink: { backgroundColor: palette.boneWhite },
-  metricIconText: { fontSize: 15, fontFamily: fontFamilies.bold },
-  metricText_dirty: { color: palette.dirtyOrange },
-  metricText_yellow: { color: palette.statusInText },
-  metricText_orange: { color: palette.pumpkinOrange },
-  metricText_ink: { color: palette.ink },
   metricValue: { color: palette.ink, fontSize: 23, fontFamily: fontFamilies.bold, marginTop: 14 },
   metricDetail: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular, marginTop: 3 },
   cardTitle: { color: palette.ink, fontSize: 16, fontFamily: fontFamilies.semiBold },

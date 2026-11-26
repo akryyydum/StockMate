@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useAuth } from './AuthProvider';
 
 export function useAuthForm() {
-  const { login, startupError } = useAuth();
+  const { login, register, startupError } = useAuth();
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -13,7 +15,11 @@ export function useAuthForm() {
     setError(null);
     setBusy(true);
     try {
-      await login(email.trim(), password);
+      if (mode === 'register') {
+        await register(name.trim(), email.trim(), password);
+      } else {
+        await login(email.trim(), password);
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to continue.');
     } finally {
@@ -22,6 +28,10 @@ export function useAuthForm() {
   }
 
   return {
+    mode,
+    setMode,
+    name,
+    setName,
     email,
     setEmail,
     password,

@@ -618,6 +618,23 @@
   margin-top: 2px;
 }
 
+.auth-mode-toggle {
+  display: block;
+  margin: 15px auto 0;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--sm-dirty);
+  cursor: pointer;
+  font-family: var(--sm-font-semibold);
+  font-size: 10px;
+}
+
+.auth-mode-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .button-arrow {
   margin-left: auto;
   font-size: 16px;
