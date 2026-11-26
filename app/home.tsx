@@ -627,7 +627,7 @@ function createStyles(palette: ThemeColors) {
     themeToggle: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surfaceSubtle },
     themeToggleIcon: { color: palette.dirtyOrange, fontSize: 21, lineHeight: 26 },
     contentScroll: { flex: 1 },
-    content: { width: '100%', maxWidth: 1500, alignSelf: 'center', padding: 25, gap: 17 },
+    content: { width: '100%', alignSelf: 'stretch', padding: 20, gap: 17 },
     footer: { color: palette.muted, fontSize: 8, textAlign: 'center', fontFamily: fontFamilies.regular, marginTop: 2 },
     mobileHeader: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper },
     menuButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: palette.accentSoft },
