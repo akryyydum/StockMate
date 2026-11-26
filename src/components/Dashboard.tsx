@@ -24,6 +24,7 @@ import {
   Modal,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { authApi, ActivityPage, DashboardActivity, DashboardOverview } from '../auth/authApi';
@@ -43,6 +44,8 @@ const currency = new Intl.NumberFormat('en-PH', {
 
 export function Dashboard({ accessToken }: Props) {
   const { palette } = useAppTheme();
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 600;
   const styles = createStyles(palette);
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -183,7 +186,7 @@ export function Dashboard({ accessToken }: Props) {
               <StatusRow label="Low stock" value={summary.lowStockItems} total={total} background={palette.statusLowBackground} color={palette.statusLowText} />
               <StatusRow label="Out of stock" value={summary.outOfStockItems} total={total} background={palette.statusOutBackground} color={palette.statusOutText} />
             </View>
-            <View style={styles.activityCard}>
+            <View style={[styles.activityCard, isNarrow && styles.activityCardNarrow]}>
               <View style={styles.activityHeader}>
                 <View>
                   <View style={styles.sectionTitle}>
@@ -206,7 +209,7 @@ export function Dashboard({ accessToken }: Props) {
               </View>
               {data.activities.length ? (
                 data.activities.slice(0, 2).map((activity) => (
-                  <ActivityRow key={activity.id} activity={activity} />
+                  <ActivityRow key={activity.id} activity={activity} compactTime={isNarrow} />
                 ))
               ) : (
                 <Text style={styles.emptyText}>No activity recorded yet.</Text>
@@ -264,7 +267,7 @@ export function Dashboard({ accessToken }: Props) {
                   <View key={group.key} style={styles.activityDayGroup}>
                     <Text style={styles.activityDayHeading}>{group.label}</Text>
                     {group.activities.map((activity) => (
-                      <ActivityRow key={activity.id} activity={activity} />
+                      <ActivityRow key={activity.id} activity={activity} compactTime />
                     ))}
                   </View>
                 ))}
@@ -417,7 +420,13 @@ function StatusRow({
   );
 }
 
-function ActivityRow({ activity }: { activity: DashboardActivity }) {
+function ActivityRow({
+  activity,
+  compactTime = false,
+}: {
+  activity: DashboardActivity;
+  compactTime?: boolean;
+}) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
   const description = describeActivity(activity);
@@ -433,7 +442,7 @@ function ActivityRow({ activity }: { activity: DashboardActivity }) {
         </Text>
         {activity.itemName ? <Text numberOfLines={1} style={styles.activityItem}>{activity.itemName}</Text> : null}
       </View>
-      <Text style={styles.activityTime}>{formatTime(activity.createdAt)}</Text>
+      <Text style={styles.activityTime}>{formatTime(activity.createdAt, compactTime)}</Text>
     </View>
   );
 }
@@ -479,9 +488,10 @@ function formatQuantity(quantity: number | null) {
   return quantity === null ? '' : quantity.toLocaleString(undefined, { maximumFractionDigits: 3 });
 }
 
-function formatTime(value: string) {
+function formatTime(value: string, compact = false) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return 'Unknown time';
+  if (compact) return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
@@ -510,9 +520,10 @@ function createStyles(palette: ThemeColors) {
     metricLabel: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.medium },
     metricValue: { color: palette.ink, fontSize: 23, fontFamily: fontFamilies.bold, marginTop: 6 },
     metricHint: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 4 },
-    contentGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 14 },
+    contentGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 14 },
     statusCard: { flexGrow: 1, flexBasis: 280, padding: 19, borderRadius: 17, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
-    activityCard: { flexGrow: 2, flexBasis: 460, padding: 19, borderRadius: 17, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+    activityCard: { flexGrow: 2, flexBasis: 460, minWidth: 0, padding: 19, borderRadius: 17, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+    activityCardNarrow: { width: '100%', flexGrow: 1, flexBasis: '100%' },
     viewAllButton: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, borderRadius: 9, borderWidth: 1, borderColor: palette.line },
     viewAllText: { color: palette.dirtyOrange, fontSize: 9, fontFamily: fontFamilies.semiBold },
     movementCard: { padding: 19, borderRadius: 17, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
