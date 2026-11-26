@@ -450,6 +450,58 @@
   outline-offset: 2px;
 }
 
+.forgot-password-link,
+.recovery-email-edit {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--sm-dirty);
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--sm-font-semibold);
+  font-size: 9px;
+}
+
+.recovery-email-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--sm-line);
+  border-radius: 10px;
+  color: var(--sm-muted);
+  font-size: 11px;
+}
+
+.recovery-email-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.form-success {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #b8dfc0;
+  border-radius: 9px;
+  background: #f0fff3;
+  color: #256d3b;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.recovery-form .ui-input {
+  padding-left: 13px;
+}
+
+.recovery-form #reset-otp {
+  font-family: var(--sm-font-semibold);
+  font-size: 18px;
+  letter-spacing: 8px;
+  text-align: center;
+}
+
 .auth-form {
   display: grid;
   gap: 17px;
@@ -724,7 +776,7 @@
 
   .auth-shell {
     grid-template-columns: 1fr;
-    width: 100vw;
+    width: 100%;
     min-height: 100vh;
     min-height: 100dvh;
     border: 0;
@@ -732,50 +784,62 @@
     box-shadow: none;
   }
 
-  .showcase {
-    min-height: 310px;
-    padding: 28px clamp(24px, 6vw, 54px);
+  .showcase,
+  .panel-footer {
+    display: none;
   }
 
-  .showcase-copy {
-    max-width: 600px;
-    margin: 43px 0 17px;
-  }
-
-  .showcase h1 {
-    max-width: 580px;
-    font-size: clamp(38px, 7vw, 56px);
-  }
-
-  .inventory-preview {
-    position: absolute;
-    right: clamp(24px, 5vw, 54px);
-    bottom: 23px;
-    width: min(36%, 290px);
-    transform: rotate(-1.5deg) scale(0.88);
-    transform-origin: right bottom;
-  }
-
-  .showcase-bottom {
-    position: absolute;
-    right: clamp(24px, 6vw, 54px);
-    bottom: 21px;
-    left: clamp(24px, 6vw, 54px);
+  .mobile-wordmark {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: min(100%, 410px);
+    align-self: center;
   }
 
   .form-panel {
-    min-height: 490px;
-    padding: 28px clamp(24px, 8vw, 100px) 22px;
+    min-height: 100vh;
+    min-height: 100dvh;
+    justify-content: center;
+    padding: 24px clamp(24px, 8vw, 100px);
   }
 
   .form-content {
     width: min(100%, 410px);
-    padding: 25px 0;
+    margin: 0 auto;
+    padding: 14px 0;
   }
 
-  .panel-footer {
-    width: min(100%, 410px);
-    align-self: center;
+  .auth-page-login {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .auth-page-login .auth-shell {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .auth-page-login .form-panel {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .auth-page-recovery {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .auth-page-recovery .auth-shell {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
   }
 }
 
@@ -794,13 +858,13 @@
   }
 
   .showcase-copy {
-    margin: 28px 0 15px;
+    margin: 16px 0 8px;
   }
 
   .showcase h1 {
-    margin: 14px 0 10px;
-    font-size: clamp(42px, 4.2vw, 54px);
-    letter-spacing: -2.6px;
+    margin: 10px 0 8px;
+    font-size: clamp(36px, 3.4vw, 44px);
+    letter-spacing: -2.2px;
   }
 
   .showcase-description {
@@ -830,20 +894,24 @@
   }
 
   .form-panel {
-    padding: 30px 42px 21px;
+    padding: 24px 42px 14px;
   }
 
   .form-content {
-    padding: 10px 0;
+    padding: 0;
+  }
+
+  .showcase-bottom {
+    margin-top: 10px;
+  }
+
+  .form-divider,
+  .form-footnote {
+    display: none;
   }
 }
 
 @media (max-width: 600px) {
-  .showcase {
-    min-height: 292px;
-    padding: 20px 22px;
-  }
-
   .brand-mark {
     width: 39px;
     height: 39px;
@@ -863,93 +931,47 @@
     font-size: 8px;
   }
 
-  .edition-chip {
-    padding: 8px;
-    font-size: 7px;
-    letter-spacing: 0.6px;
-  }
-
-  .showcase-copy {
-    margin: 48px 0 21px;
-  }
-
-  .showcase h1 {
-    max-width: 430px;
-    margin: 14px 0 9px;
-    font-size: clamp(36px, 10vw, 48px);
-    letter-spacing: -2px;
-  }
-
-  .showcase-description {
-    max-width: 310px;
-    font-size: 11px;
-  }
-
-  .animated-tagline {
-    min-height: 25px;
-    margin-top: 9px;
-  }
-
-  .blur-tagline {
-    font-size: 11px;
-  }
-
-  .inventory-preview {
-    display: none;
-  }
-
-  .showcase-bottom {
-    right: 22px;
-    bottom: 16px;
-    left: 22px;
-    margin: 0;
-    font-size: 8px;
-  }
-
   .form-panel {
-    min-height: 0;
-    justify-content: flex-start;
-    padding: 0 22px 22px;
+    padding: 20px 22px;
   }
 
   .form-content {
-    padding: 27px 0 25px;
+    padding: 8px 0 12px;
   }
 
   .form-content h2 {
-    margin-top: 17px;
-    font-size: 29px;
+    margin-top: 14px;
+    font-size: 27px;
   }
 
   .auth-form {
-    gap: 15px;
+    gap: 13px;
+  }
+}
+
+@media (max-height: 600px) and (max-width: 940px) {
+  .auth-page-login {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-y: auto;
   }
 
-  .panel-footer {
-    margin-top: auto;
+  .auth-page-login .auth-shell {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .auth-page-login .form-panel {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 }
 
 @media (max-width: 360px) {
-  .showcase {
-    min-height: 275px;
-    padding-right: 17px;
-    padding-left: 17px;
-  }
-
-  .edition-chip {
-    font-size: 0;
-  }
-
-  .edition-chip > span {
-    width: 7px;
-    height: 7px;
-  }
-
-  .showcase h1 {
-    font-size: 34px;
-  }
-
   .form-panel {
     padding-right: 17px;
     padding-left: 17px;

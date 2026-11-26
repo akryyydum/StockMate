@@ -7,9 +7,11 @@ import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import { ActivityLog } from './models/ActivityLog.js';
 import { InventoryItem } from './models/InventoryItem.js';
+import { PasswordResetOtp } from './models/PasswordResetOtp.js';
 import { RefreshToken } from './models/RefreshToken.js';
 import { StockMovement } from './models/StockMovement.js';
 import { User } from './models/User.js';
@@ -19,6 +21,9 @@ const ACCESS_TOKEN_TTL = '15m';
 const DEFAULT_SESSION_DURATION_MINUTES = 120;
 const MAX_SESSION_DURATION_MINUTES = 30 * 24 * 60;
 const PASSWORD_HASH_ROUNDS = 12;
+const PASSWORD_RESET_OTP_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_RESEND_DELAY_MS = 60 * 1000;
+const PASSWORD_RESET_MAX_ATTEMPTS = 5;
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:8081,http://localhost:8082,http://localhost:19006')
   .split(',')
@@ -51,6 +56,20 @@ const authRateLimit = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many authentication attempts. Try again later.' },
 });
+const passwordResetRequestRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many reset-code requests. Try again later.' },
+});
+const passwordResetSubmitRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many password reset attempts. Try again later.' },
+});
 
 const emailSchema = z.string().trim().email().max(254).transform((value) => value.toLowerCase());
 const passwordSchema = z.string().min(12).max(128).refine(
@@ -61,6 +80,12 @@ const passwordSchema = z.string().min(12).max(128).refine(
 const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1).max(128),
+});
+const passwordResetRequestSchema = z.object({ email: emailSchema });
+const passwordResetSchema = z.object({
+  email: emailSchema,
+  otp: z.string().regex(/^\d{6}$/),
+  password: passwordSchema,
 });
 
 const registerSchema = z.object({
@@ -173,6 +198,45 @@ function createAccessToken(user) {
 
 function hashRefreshToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function hashPasswordResetOtp(email, otp) {
+  return crypto
+    .createHmac('sha256', process.env.JWT_ACCESS_SECRET)
+    .update(`${email}:${otp}`)
+    .digest('hex');
+}
+
+function generatePasswordResetOtp() {
+  return String(crypto.randomInt(100_000, 1_000_000));
+}
+
+function verifyPasswordResetOtp(email, otp, expectedHash) {
+  const actual = Buffer.from(hashPasswordResetOtp(email, otp), 'hex');
+  const expected = Buffer.from(expectedHash, 'hex');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function createSmtpTransport() {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT);
+  const secure = process.env.SMTP_SECURE === 'true';
+  const user = process.env.EMAIL_USER || process.env.SMTP_USER;
+  const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM || user;
+  if (!host || !from || !Number.isInteger(port) || port < 1 || port > 65535) {
+    return null;
+  }
+  if (Boolean(user) !== Boolean(pass)) {
+    throw new Error('EMAIL_USER and EMAIL_PASS must both be configured, or both omitted.');
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: user ? { user, pass } : undefined,
+  });
 }
 
 async function createRefreshToken(userId, expiresAt) {
@@ -323,6 +387,113 @@ app.post('/api/auth/login', authRateLimit, async (req, res) => {
 
   await recordActivity(user, 'login');
   res.json(await createSession(user));
+});
+
+app.post('/api/auth/password-reset/request', passwordResetRequestRateLimit, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const input = validate(passwordResetRequestSchema, req.body, res);
+  if (!input) return;
+
+  const transport = createSmtpTransport();
+  if (!transport) {
+    res.status(503).json({
+      message: 'Password reset email is not configured. Contact the system administrator.',
+    });
+    return;
+  }
+
+  const now = new Date();
+  const existing = await PasswordResetOtp.findOne({ email: input.email });
+  if (existing && now.getTime() - existing.requestedAt.getTime() < PASSWORD_RESET_RESEND_DELAY_MS) {
+    res.status(429).json({ message: 'Wait one minute before requesting another reset code.' });
+    return;
+  }
+
+  const otp = generatePasswordResetOtp();
+  const record = existing ?? new PasswordResetOtp({ email: input.email });
+  record.codeHash = hashPasswordResetOtp(input.email, otp);
+  record.attempts = 0;
+  record.requestedAt = now;
+  record.expiresAt = new Date(now.getTime() + PASSWORD_RESET_OTP_TTL_MS);
+  try {
+    await record.save();
+  } catch (error) {
+    if (error?.code === 11000) {
+      res.status(429).json({ message: 'Wait one minute before requesting another reset code.' });
+      return;
+    }
+    throw error;
+  }
+
+  const user = await User.findOne({ email: input.email }).select('email');
+  if (user) {
+    try {
+      await transport.sendMail({
+        from: process.env.SMTP_FROM,
+        to: user.email,
+        subject: 'Your StockMate password reset code',
+        text: `Your StockMate password reset code is ${otp}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
+        html: `<p>Your StockMate password reset code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:8px">${otp}</p><p>This code expires in 10 minutes. If you did not request this, you can ignore this email.</p>`,
+      });
+    } catch (error) {
+      await PasswordResetOtp.deleteOne({ _id: record._id });
+      console.error('Password reset email delivery failed.', error);
+    }
+  }
+
+  res.json({
+    message: 'If an account exists for that email, a reset code will be sent shortly. If it does not arrive, contact the system administrator.',
+  });
+});
+
+app.post('/api/auth/password-reset', passwordResetSubmitRateLimit, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const input = validate(passwordResetSchema, req.body, res);
+  if (!input) return;
+
+  const now = new Date();
+  const record = await PasswordResetOtp.findOne({ email: input.email });
+  const invalidMessage = 'The reset code is invalid or expired.';
+  if (
+    !record ||
+    record.expiresAt <= now ||
+    record.attempts >= PASSWORD_RESET_MAX_ATTEMPTS
+  ) {
+    res.status(400).json({ message: invalidMessage });
+    return;
+  }
+
+  if (!verifyPasswordResetOtp(input.email, input.otp, record.codeHash)) {
+    await PasswordResetOtp.updateOne(
+      { _id: record._id, attempts: { $lt: PASSWORD_RESET_MAX_ATTEMPTS } },
+      { $inc: { attempts: 1 } },
+    );
+    res.status(400).json({ message: invalidMessage });
+    return;
+  }
+
+  const consumed = await PasswordResetOtp.findOneAndDelete({
+    _id: record._id,
+    codeHash: record.codeHash,
+    expiresAt: { $gt: now },
+    attempts: { $lt: PASSWORD_RESET_MAX_ATTEMPTS },
+  });
+  if (!consumed) {
+    res.status(400).json({ message: invalidMessage });
+    return;
+  }
+
+  const user = await User.findOne({ email: input.email });
+  if (!user) {
+    res.status(400).json({ message: invalidMessage });
+    return;
+  }
+
+  user.passwordHash = await bcrypt.hash(input.password, PASSWORD_HASH_ROUNDS);
+  user.mustChangeCredentials = false;
+  await user.save();
+  await RefreshToken.deleteMany({ userId: user._id });
+  res.json({ message: 'Password reset successfully. You can now sign in.' });
 });
 
 app.post('/api/auth/refresh', async (req, res) => {
@@ -913,4 +1084,13 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-export { app, settingsSchema };
+export {
+  app,
+  createSmtpTransport,
+  generatePasswordResetOtp,
+  hashPasswordResetOtp,
+  passwordResetRequestSchema,
+  passwordResetSchema,
+  settingsSchema,
+  verifyPasswordResetOtp,
+};

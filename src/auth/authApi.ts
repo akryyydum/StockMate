@@ -155,6 +155,20 @@ export const authApi = {
     });
   },
 
+  requestPasswordReset(email: string) {
+    return request<{ message: string }>('/auth/password-reset/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword(email: string, otp: string, password: string) {
+    return request<{ message: string }>('/auth/password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, password }),
+    });
+  },
+
   refresh(refreshToken: string) {
     return request<AuthSession>('/auth/refresh', {
       method: 'POST',

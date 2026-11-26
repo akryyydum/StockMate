@@ -5,9 +5,19 @@ import { once } from 'node:events';
 process.env.JWT_ACCESS_SECRET = 'test-secret-that-is-long-enough-for-jwt-signing';
 process.env.CORS_ORIGINS = 'http://localhost:8081';
 
-const { app, settingsSchema } = await import('../src/app.js');
+const {
+  app,
+  createSmtpTransport,
+  generatePasswordResetOtp,
+  hashPasswordResetOtp,
+  passwordResetRequestSchema,
+  passwordResetSchema,
+  settingsSchema,
+  verifyPasswordResetOtp,
+} = await import('../src/app.js');
 const { ActivityLog } = await import('../src/models/ActivityLog.js');
 const { InventoryItem } = await import('../src/models/InventoryItem.js');
+const { PasswordResetOtp } = await import('../src/models/PasswordResetOtp.js');
 const { RefreshToken } = await import('../src/models/RefreshToken.js');
 const { StockMovement } = await import('../src/models/StockMovement.js');
 const { User } = await import('../src/models/User.js');
@@ -66,6 +76,44 @@ describe('authentication API input handling', () => {
     assert.equal(settingsSchema.safeParse({}).success, false);
   });
 
+  it('creates six-digit password reset codes and rejects a different code', () => {
+    const otp = generatePasswordResetOtp();
+    assert.match(otp, /^\d{6}$/);
+
+    const email = 'jordan@example.com';
+    const hash = hashPasswordResetOtp(email, otp);
+    assert.equal(verifyPasswordResetOtp(email, otp, hash), true);
+    const differentOtp = otp === '000000' ? '000001' : '000000';
+    assert.equal(verifyPasswordResetOtp(email, differentOtp, hash), false);
+    assert.equal(verifyPasswordResetOtp('other@example.com', otp, hash), false);
+
+    assert.equal(PasswordResetOtp.schema.path('expiresAt').options.expires, 0);
+    assert.equal(PasswordResetOtp.schema.path('attempts').getDefault(), 0);
+  });
+
+  it('validates recovery email, six-digit code, and new password inputs', () => {
+    assert.equal(passwordResetRequestSchema.safeParse({ email: 'jordan@example.com' }).success, true);
+    assert.equal(passwordResetRequestSchema.safeParse({ email: 'invalid' }).success, false);
+    assert.equal(
+      passwordResetSchema.safeParse({
+        email: 'jordan@example.com',
+        otp: '012345',
+        password: 'a-valid-password',
+      }).success,
+      true,
+    );
+    for (const otp of ['12345', '1234567', '12a456']) {
+      assert.equal(
+        passwordResetSchema.safeParse({
+          email: 'jordan@example.com',
+          otp,
+          password: 'a-valid-password',
+        }).success,
+        false,
+      );
+    }
+  });
+
   it('reports the health endpoint without connecting to MongoDB', async () => {
     const response = await fetch(`${baseUrl}/api/health`);
     assert.equal(response.status, 200);
@@ -98,6 +146,80 @@ describe('authentication API input handling', () => {
     assert.deepEqual(await response.json(), {
       message: 'Please check the information you entered.',
     });
+  });
+
+  it('rejects malformed password reset requests before accessing account data', async () => {
+    const responses = await Promise.all([
+      fetch(`${baseUrl}/api/auth/password-reset/request`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'not-an-email' }),
+      }),
+      fetch(`${baseUrl}/api/auth/password-reset`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'jordan@example.com',
+          otp: 'not-six-digits',
+          password: 'a-valid-password',
+        }),
+      }),
+    ]);
+    assert.deepEqual(responses.map((response) => response.status), [400, 400]);
+    assert.deepEqual(
+      await Promise.all(responses.map((response) => response.json())),
+      [
+        { message: 'Please check the information you entered.' },
+        { message: 'Please check the information you entered.' },
+      ],
+    );
+  });
+
+  it('requires SMTP configuration before starting a password reset request', async () => {
+    for (const key of ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM']) {
+      delete process.env[key];
+    }
+
+    const response = await fetch(`${baseUrl}/api/auth/password-reset/request`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'jordan@example.com' }),
+    });
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await response.json(), {
+      message: 'Password reset email is not configured. Contact the system administrator.',
+    });
+  });
+
+  it('uses EMAIL_USER and EMAIL_PASS for the SMTP transport', () => {
+    const saved = new Map(
+      ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'SMTP_FROM', 'EMAIL_USER', 'EMAIL_PASS', 'SMTP_USER', 'SMTP_PASS']
+        .map((key) => [key, process.env[key]]),
+    );
+    try {
+      process.env.SMTP_HOST = 'smtp.example.com';
+      process.env.SMTP_PORT = '587';
+      process.env.SMTP_SECURE = 'false';
+      process.env.SMTP_FROM = 'StockMate <mail@example.com>';
+      process.env.EMAIL_USER = 'mail@example.com';
+      process.env.EMAIL_PASS = 'test-app-password';
+      delete process.env.SMTP_USER;
+      delete process.env.SMTP_PASS;
+
+      const transport = createSmtpTransport();
+      assert.equal(transport.options.host, 'smtp.example.com');
+      assert.equal(transport.options.port, 587);
+      assert.deepEqual(transport.options.auth, {
+        user: 'mail@example.com',
+        pass: 'test-app-password',
+      });
+    } finally {
+      for (const [key, value] of saved) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 
   it('requires a bearer token for the account endpoint', async () => {

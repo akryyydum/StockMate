@@ -10,18 +10,25 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
 export function AuthScreen() {
   const form = useAuthForm();
+  const { height } = useWindowDimensions();
+  const compact = height < 760;
+  const recovery = Boolean(form.recoveryStep);
 
   return (
     <KeyboardAvoidingView
       style={styles.page}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, compact && styles.compactScrollContent]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.container}>
           <View style={styles.brandRow}>
             <Image source={require('../../assets/brand-logo.png')} style={styles.brandIcon} />
@@ -31,91 +38,188 @@ export function AuthScreen() {
             </View>
           </View>
 
-          <View style={styles.hero}>
-            <View style={styles.heroCopy}>
-              <View style={styles.pill}>
-                <View style={styles.pillDot} />
-                <Text style={styles.pillText}>BUILT FOR BETTER STOCK DAYS</Text>
+          {!compact && !recovery ? (
+            <View style={styles.hero}>
+              <View style={styles.heroCopy}>
+                <View style={styles.pill}>
+                  <View style={styles.pillDot} />
+                  <Text style={styles.pillText}>BUILT FOR BETTER STOCK DAYS</Text>
+                </View>
+                <Text style={styles.heroTitle}>A clearer view of what matters.</Text>
+                <Text style={styles.heroSubtitle}>
+                  Keep every item in shape, and every next step in sight.
+                </Text>
               </View>
-              <Text style={styles.heroTitle}>A clearer view of what matters.</Text>
-              <Text style={styles.heroSubtitle}>
-                Keep every item in shape, and every next step in sight.
-              </Text>
-            </View>
-            <View style={styles.heroArt} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              <Image source={require('../../assets/brand-logo.png')} style={styles.heroIcon} />
-              <View style={styles.artLabel}>
-                <View style={styles.artDot} />
-                <Text style={styles.artLabelText}>Stock on track</Text>
+              <View style={styles.heroArt} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <Image source={require('../../assets/brand-logo.png')} style={styles.heroIcon} />
+                <View style={styles.artLabel}>
+                  <View style={styles.artDot} />
+                  <Text style={styles.artLabelText}>Stock on track</Text>
+                </View>
               </View>
             </View>
-          </View>
+          ) : null}
 
           <View style={styles.card}>
             <View style={styles.intro}>
-              <Text style={styles.eyebrow}>{form.mode === 'register' ? 'CREATE YOUR ACCOUNT' : 'WELCOME BACK'}</Text>
-              <Text style={styles.heading}>{form.mode === 'register' ? 'Your inventory, your own.' : 'Good to see you.'}</Text>
+              <Text style={styles.eyebrow}>
+                {form.recoveryStep ? 'ACCOUNT RECOVERY' : form.mode === 'register' ? 'CREATE YOUR ACCOUNT' : 'WELCOME BACK'}
+              </Text>
+              <Text style={styles.heading}>
+                {form.recoveryStep === 'request'
+                  ? 'Reset your password.'
+                  : form.recoveryStep === 'verify'
+                    ? 'Check your email.'
+                    : form.mode === 'register'
+                      ? 'Your inventory, your own.'
+                      : 'Good to see you.'}
+              </Text>
               <Text style={styles.description}>
-                {form.mode === 'register'
-                  ? 'Create a private workspace with your own Super Admin account.'
-                  : 'Sign in to pick up right where you left off.'}
+                {form.recoveryStep === 'request'
+                  ? 'Enter your account email and we’ll send a six-digit reset code.'
+                  : form.recoveryStep === 'verify'
+                    ? 'Enter the six-digit code and choose a new password.'
+                    : form.mode === 'register'
+                      ? 'Create a private workspace with your own Super Admin account.'
+                      : 'Sign in to pick up right where you left off.'}
               </Text>
             </View>
 
-            {form.startupError ? (
+            {!recovery && form.startupError ? (
               <View accessibilityRole="alert" style={styles.notice}>
                 <Text style={styles.noticeText}>{form.startupError}</Text>
               </View>
             ) : null}
 
-            {form.mode === 'register' ? (
-              <Field
-                label="Full name"
-                value={form.name}
-                onChangeText={form.setName}
-                placeholder="Your name"
-                autoComplete="name"
-                textContentType="name"
-                accessibilityLabel="Full name"
-              />
+            {form.successMessage ? (
+              <Text accessibilityRole="alert" style={styles.success}>{form.successMessage}</Text>
             ) : null}
 
-            <Field
-              label="Email address"
-              value={form.email}
-              onChangeText={form.setEmail}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              textContentType="emailAddress"
-              accessibilityLabel="Email address"
-            />
+            {form.recoveryStep ? (
+              <>
+                {form.recoveryStep === 'request' ? (
+                  <Field
+                    label="Email address"
+                    value={form.email}
+                    onChangeText={form.setEmail}
+                    placeholder="you@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    accessibilityLabel="Email address"
+                  />
+                ) : (
+                  <>
+                    <View style={styles.recoveryEmailRow}>
+                      <Text style={styles.recoveryEmail} numberOfLines={1}>{form.email}</Text>
+                      <Pressable onPress={form.editRecoveryEmail} accessibilityRole="button">
+                        <Text style={styles.recoveryLink}>Change</Text>
+                      </Pressable>
+                    </View>
+                    <Field
+                      label="Six-digit email code"
+                      value={form.otp}
+                      onChangeText={(value) => form.setOtp(value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      keyboardType="number-pad"
+                      autoComplete="one-time-code"
+                      textContentType="oneTimeCode"
+                      accessibilityLabel="Six-digit email code"
+                      maxLength={6}
+                    />
+                    <Field
+                      label="New password"
+                      value={form.newPassword}
+                      onChangeText={form.setNewPassword}
+                      placeholder="At least 12 characters"
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      textContentType="newPassword"
+                      accessibilityLabel="New password"
+                      maxLength={128}
+                    />
+                    <Field
+                      label="Confirm new password"
+                      value={form.confirmNewPassword}
+                      onChangeText={form.setConfirmNewPassword}
+                      placeholder="Enter it again"
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      textContentType="newPassword"
+                      accessibilityLabel="Confirm new password"
+                      maxLength={128}
+                    />
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {form.mode === 'register' ? (
+                  <Field
+                    label="Full name"
+                    value={form.name}
+                    onChangeText={form.setName}
+                    placeholder="Your name"
+                    autoComplete="name"
+                    textContentType="name"
+                    accessibilityLabel="Full name"
+                  />
+                ) : null}
 
-            <Field
-              label="Password"
-              value={form.password}
-              onChangeText={form.setPassword}
-              placeholder="Enter your password"
-              secureTextEntry={!form.showPassword}
-              autoCapitalize="none"
-              autoComplete="current-password"
-              textContentType="password"
-              accessibilityLabel="Password"
-              maxLength={128}
-            />
+                <Field
+                  label="Email address"
+                  value={form.email}
+                  onChangeText={form.setEmail}
+                  placeholder="you@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  accessibilityLabel="Email address"
+                />
 
-            {form.mode === 'login' ? <Pressable
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: form.showPassword }}
-              onPress={() => form.setShowPassword((current) => !current)}
-              style={styles.showPassword}
-            >
-              <View style={[styles.checkbox, form.showPassword && styles.checkboxChecked]}>
-                {form.showPassword ? <Text style={styles.checkmark}>✓</Text> : null}
-              </View>
-              <Text style={styles.showPasswordText}>Show password</Text>
-            </Pressable> : null}
+                <View style={styles.field}>
+                  <View style={styles.passwordLabelRow}>
+                    <Text style={styles.label}>Password</Text>
+                    {form.mode === 'login' ? (
+                      <Pressable onPress={form.startPasswordRecovery} accessibilityRole="button">
+                        <Text style={styles.recoveryLink}>Forgot password?</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <TextInput
+                    accessibilityLabel="Password"
+                    autoCapitalize="none"
+                    autoComplete="current-password"
+                    maxLength={128}
+                    onChangeText={form.setPassword}
+                    placeholder="Enter your password"
+                    placeholderTextColor="#938b82"
+                    secureTextEntry={!form.showPassword}
+                    style={styles.input}
+                    textContentType="password"
+                    value={form.password}
+                  />
+                </View>
+
+                {form.mode === 'login' ? (
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: form.showPassword }}
+                    onPress={() => form.setShowPassword((current) => !current)}
+                    style={styles.showPassword}
+                  >
+                    <View style={[styles.checkbox, form.showPassword && styles.checkboxChecked]}>
+                      {form.showPassword ? <Text style={styles.checkmark}>✓</Text> : null}
+                    </View>
+                    <Text style={styles.showPasswordText}>Show password</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            )}
 
             {form.error ? (
               <Text accessibilityRole="alert" style={styles.error}>
@@ -126,7 +230,11 @@ export function AuthScreen() {
             <Pressable
               accessibilityRole="button"
               disabled={form.busy}
-              onPress={() => void form.submit()}
+              onPress={() => {
+                if (form.recoveryStep === 'request') void form.requestPasswordReset();
+                else if (form.recoveryStep === 'verify') void form.completePasswordReset();
+                else void form.submit();
+              }}
               style={({ pressed }) => [
                 styles.submit,
                 pressed && !form.busy && styles.submitPressed,
@@ -137,25 +245,56 @@ export function AuthScreen() {
                 <LoadingAnimation size={22} />
               ) : (
                 <Text style={styles.submitText}>
-                  {form.mode === 'register' ? 'Create Super Admin account' : 'Sign in to StockMate'}
+                  {form.recoveryStep === 'request'
+                    ? 'Send reset code'
+                    : form.recoveryStep === 'verify'
+                      ? 'Reset password'
+                      : form.mode === 'register'
+                        ? 'Create Super Admin account'
+                        : 'Sign in to StockMate'}
                 </Text>
               )}
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              disabled={form.busy}
-              onPress={() => form.setMode(form.mode === 'login' ? 'register' : 'login')}
-              style={styles.modeToggle}
-            >
-              <Text style={styles.modeToggleText}>
-                {form.mode === 'register' ? 'Already have an account? Sign in' : 'New to StockMate? Register'}
-              </Text>
-            </Pressable>
+            {form.recoveryStep ? (
+              <>
+                {form.recoveryStep === 'verify' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={form.busy}
+                    onPress={() => void form.requestPasswordReset()}
+                    style={styles.modeToggle}
+                  >
+                    <Text style={styles.modeToggleText}>Send a new code</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={form.busy}
+                  onPress={form.cancelPasswordRecovery}
+                  style={styles.modeToggle}
+                >
+                  <Text style={styles.modeToggleText}>Back to sign in</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                disabled={form.busy}
+                onPress={() => form.setMode(form.mode === 'login' ? 'register' : 'login')}
+                style={styles.modeToggle}
+              >
+                <Text style={styles.modeToggleText}>
+                  {form.mode === 'register' ? 'Already have an account? Sign in' : 'New to StockMate? Register'}
+                </Text>
+              </Pressable>
+            )}
           </View>
 
-          <Text style={styles.securityText}>
-            Your account is protected with encrypted credentials.
-          </Text>
+          {!recovery ? (
+            <Text style={styles.securityText}>
+              Your account is protected with encrypted credentials.
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -169,10 +308,10 @@ type FieldProps = {
   placeholder: string;
   accessibilityLabel: string;
   secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'email-address';
+  keyboardType?: 'default' | 'email-address' | 'number-pad';
   autoCapitalize?: 'none' | 'sentences';
-  autoComplete?: 'email' | 'current-password' | 'name';
-  textContentType?: 'emailAddress' | 'password' | 'name';
+  autoComplete?: 'email' | 'current-password' | 'name' | 'one-time-code' | 'new-password';
+  textContentType?: 'emailAddress' | 'password' | 'name' | 'oneTimeCode' | 'newPassword';
   maxLength?: number;
 };
 
@@ -213,6 +352,7 @@ function Field({
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.boneWhite },
   scrollContent: { flexGrow: 1, justifyContent: 'center', paddingVertical: 28, paddingHorizontal: 20 },
+  compactScrollContent: { paddingVertical: 12 },
   container: { width: '100%', maxWidth: 460, alignSelf: 'center' },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 18 },
   brandIcon: { width: 44, height: 44, borderRadius: 13 },
@@ -295,6 +435,33 @@ const styles = StyleSheet.create({
   },
   noticeText: { color: '#76510a', fontSize: 12, lineHeight: 18, fontFamily: fontFamilies.medium },
   field: { marginBottom: 13 },
+  passwordLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 },
+  recoveryEmailRow: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 10,
+    marginBottom: 13,
+  },
+  recoveryEmail: { flex: 1, color: colors.muted, fontSize: 12, fontFamily: fontFamilies.regular },
+  recoveryLink: { color: colors.dirtyOrange, fontSize: 10, fontFamily: fontFamilies.semiBold },
+  success: {
+    color: '#256d3b',
+    backgroundColor: '#f0fff3',
+    borderColor: '#b8dfc0',
+    borderWidth: 1,
+    borderRadius: 9,
+    padding: 10,
+    fontSize: 11,
+    lineHeight: 17,
+    marginBottom: 12,
+    fontFamily: fontFamilies.medium,
+  },
   label: { color: colors.ink, fontSize: 11, fontFamily: fontFamilies.semiBold, marginBottom: 7 },
   input: {
     minHeight: 47,
