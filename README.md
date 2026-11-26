@@ -33,7 +33,7 @@ The interface uses the brand-board palette (bone white `#ededef`, burnt yellow `
 
    The first user creates an account from the app's Register screen. Each registration becomes that account's Super Admin and starts with an empty private inventory.
 
-4. In a separate terminal, copy `.env.example` to `.env`. Set `EXPO_PUBLIC_API_URL` to the reachable API base URL, then start the app:
+4. In a separate terminal, copy `.env.example` to `.env`. The configured API URL is shared by web and Android builds. Start the app:
 
    ```sh
    npm start
@@ -41,7 +41,7 @@ The interface uses the brand-board palette (bone white `#ededef`, burnt yellow `
 
    Press `a` to open Android, or start the desktop web version with `npm run web`.
 
-For a physical Android device, use your computer's LAN IP instead of `localhost`, for example `EXPO_PUBLIC_API_URL=http://192.168.1.25:4000/api`. The API and device must be able to reach each other through the local network and firewall.
+For local API development, change `EXPO_PUBLIC_API_URL` to the API's reachable address. Android emulators and devices cannot use `localhost` to reach an API running on the development computer; use the emulator's host address or your computer's LAN IP, and ensure the API and firewall accept connections.
 
 ## Android APK
 
@@ -52,11 +52,11 @@ npx eas-cli@latest build:configure
 npx eas-cli@latest build --profile preview --platform android
 ```
 
-Follow the EAS prompts to authenticate and configure the project. Set the production API URL in `EXPO_PUBLIC_API_URL` before building. Do not ship an HTTP API URL; use HTTPS in deployed environments.
+Follow the EAS prompts to authenticate and configure the project. The `preview` APK and `production` profiles use the same HTTPS API URL configured in `eas.json`; the web client reads the same URL from `.env`. If changing API hosts, update both EAS profile values and `.env.example` / local `.env` together. Do not ship an HTTP API URL.
 
 ## Desktop app
 
-The desktop target is a responsive web app configured as a standalone PWA. Set `EXPO_PUBLIC_API_URL` to the deployed HTTPS API URL, then export:
+The desktop target is a responsive web app configured as a standalone PWA. `EXPO_PUBLIC_API_URL` is set in `.env.example` to the same API used by the APK; copy it to `.env` before exporting:
 
 ```sh
 npm run web:export

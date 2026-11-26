@@ -105,9 +105,13 @@ export class ApiError extends Error {
   }
 }
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
+const API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (!API_URL) {
+    throw new Error('StockMate API URL is not configured for this app build.');
+  }
+
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
