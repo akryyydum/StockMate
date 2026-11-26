@@ -500,7 +500,7 @@ function createStyles(palette: ThemeColors) {
     loading: { minHeight: 150, justifyContent: 'center', alignItems: 'center', gap: 10 },
     hint: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular },
     metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    metricCard: { flexGrow: 1, flexBasis: 185, minWidth: 155, minHeight: 128, overflow: 'hidden', padding: 16, borderRadius: 17, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+    metricCard: { flexGrow: 1, flexBasis: '47%', minWidth: 0, minHeight: 128, overflow: 'hidden', padding: 16, borderRadius: 17, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
     metricTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 34 },
     metricIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
     accent_orange: { backgroundColor: palette.pumpkinOrange },

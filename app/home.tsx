@@ -8,6 +8,7 @@ import Moon from 'lucide-react-native/icons/moon';
 import Package from 'lucide-react-native/icons/package';
 import Sun from 'lucide-react-native/icons/sun';
 import UsersRound from 'lucide-react-native/icons/users-round';
+import X from 'lucide-react-native/icons/x';
 import { useEffect, useState } from 'react';
 import {
   Animated,
@@ -39,6 +40,7 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 980;
   const [sidebarWidth] = useState(() => new Animated.Value(248));
+  const [mobileMenuProgress] = useState(() => new Animated.Value(0));
   const [section, setSection] = useState<Section>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -57,6 +59,18 @@ export default function HomeScreen() {
       useNativeDriver: false,
     }).start();
   }, [sidebarCollapsed, sidebarWidth]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    mobileMenuProgress.setValue(0);
+    const animation = Animated.timing(mobileMenuProgress, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [menuOpen, mobileMenuProgress]);
 
   if (!user || !accessToken) {
     return <Redirect href="/" />;
@@ -198,7 +212,7 @@ export default function HomeScreen() {
 
       {!isDesktop ? (
         <Modal
-          animationType="slide"
+          animationType="none"
           onRequestClose={() => setMenuOpen(false)}
           transparent
           visible={menuOpen}
@@ -210,17 +224,15 @@ export default function HomeScreen() {
               onPress={() => setMenuOpen(false)}
               style={styles.menuDismiss}
             />
-            <Animated.View style={[styles.mobileMenu, { width: sidebarWidth }]}>
-              <Sidebar
-                user={signedInUser}
-                section={section}
-                onNavigate={navigate}
-                onLogout={() => void handleLogout()}
-                busy={busy}
-                collapsed={sidebarCollapsed}
-                onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
-              />
-            </Animated.View>
+            <MobileNavigationMenu
+              user={signedInUser}
+              section={section}
+              onNavigate={navigate}
+              onLogout={() => void handleLogout()}
+              onClose={() => setMenuOpen(false)}
+              busy={busy}
+              progress={mobileMenuProgress}
+            />
           </View>
         </Modal>
       ) : null}
@@ -378,12 +390,14 @@ function NavButton({
   selected,
   onPress,
   collapsed,
+  mobile = false,
 }: {
   icon: typeof LayoutDashboard;
   label: string;
   selected: boolean;
   onPress: () => void;
   collapsed: boolean;
+  mobile?: boolean;
 }) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
@@ -396,6 +410,7 @@ function NavButton({
       style={({ pressed }) => [
         styles.navButton,
         collapsed && styles.collapsedNavButton,
+        mobile && styles.mobileNavButton,
         selected && styles.navSelected,
         pressed && styles.navPressed,
       ]}
@@ -405,9 +420,102 @@ function NavButton({
         color={selected ? palette.pumpkinOrange : palette.muted}
         strokeWidth={selected ? 2.2 : 1.8}
       />
-      {!collapsed ? <Text style={[styles.navText, selected && styles.navTextSelected]}>{label}</Text> : null}
-      {selected ? <View style={styles.navIndicator} /> : null}
+      {!collapsed ? (
+        <Text style={[styles.navText, mobile && styles.mobileNavText, selected && styles.navTextSelected]}>
+          {label}
+        </Text>
+      ) : null}
+      {selected ? <View style={[styles.navIndicator, mobile && styles.mobileNavIndicator]} /> : null}
     </Pressable>
+  );
+}
+
+function MobileNavigationMenu({
+  user,
+  section,
+  onNavigate,
+  onLogout,
+  onClose,
+  busy,
+  progress,
+}: {
+  user: { name: string; email: string; role: 'admin' | 'superadmin' };
+  section: Section;
+  onNavigate: (section: Section) => void;
+  onLogout: () => void;
+  onClose: () => void;
+  busy: boolean;
+  progress: Animated.Value;
+}) {
+  const { palette } = useAppTheme();
+  const styles = createStyles(palette);
+  return (
+    <Animated.View
+      style={[
+        styles.mobileMenuPanel,
+        {
+          transform: [
+            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-260, 0] }) },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.mobileMenuHeading}>
+        <Text style={styles.mobileMenuCaption}>WORKSPACE</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close navigation"
+          onPress={onClose}
+          style={styles.mobileMenuClose}
+        >
+          <X size={18} color={palette.muted} strokeWidth={1.9} />
+        </Pressable>
+      </View>
+      <View style={styles.mobileMenuNav}>
+        <NavButton
+          icon={LayoutDashboard}
+          label="Dashboard"
+          collapsed={false}
+          mobile
+          selected={section === 'dashboard'}
+          onPress={() => onNavigate('dashboard')}
+        />
+        <NavButton
+          icon={Package}
+          label="Inventory"
+          collapsed={false}
+          mobile
+          selected={section === 'inventory'}
+          onPress={() => onNavigate('inventory')}
+        />
+        <NavButton
+          icon={UsersRound}
+          label="Team"
+          collapsed={false}
+          mobile
+          selected={section === 'users'}
+          onPress={() => onNavigate('users')}
+        />
+      </View>
+      <View style={styles.mobileMenuAccount}>
+        <View style={styles.profileAvatar}>
+          <Text style={styles.profileAvatarText}>{user.name.slice(0, 1).toUpperCase()}</Text>
+        </View>
+        <View style={styles.mobileMenuProfile}>
+          <Text numberOfLines={1} style={styles.profileName}>{user.name}</Text>
+          <Text numberOfLines={1} style={styles.mobileMenuEmail}>{user.email}</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          disabled={busy}
+          onPress={onLogout}
+          style={({ pressed }) => [styles.mobileMenuLogout, pressed && styles.navPressed]}
+        >
+          {busy ? <LoadingAnimation size={18} /> : <LogOut size={17} color={palette.muted} strokeWidth={1.9} />}
+        </Pressable>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -523,9 +631,20 @@ function createStyles(palette: ThemeColors) {
     footer: { color: palette.muted, fontSize: 8, textAlign: 'center', fontFamily: fontFamilies.regular, marginTop: 2 },
     mobileHeader: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper },
     menuButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: palette.accentSoft },
-    mobileMenuBackdrop: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(33, 29, 26, 0.36)' },
-    menuDismiss: { flex: 1 },
-    mobileMenu: { maxWidth: '84%', height: '100%', flexShrink: 0, overflow: 'hidden', backgroundColor: palette.paper },
+    mobileMenuBackdrop: { flex: 1, backgroundColor: 'rgba(33, 29, 26, 0.36)' },
+    menuDismiss: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+    mobileMenuPanel: { width: '100%', paddingTop: 32, paddingBottom: 15, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper, elevation: 10, shadowColor: palette.ink, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+    mobileMenuHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+    mobileMenuCaption: { color: palette.muted, fontSize: 8, letterSpacing: 1.1, fontFamily: fontFamilies.semiBold },
+    mobileMenuClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: palette.surfaceSubtle },
+    mobileMenuNav: { flexDirection: 'row', gap: 7 },
+    mobileNavButton: { flex: 1, minHeight: 46, justifyContent: 'center', gap: 6, paddingHorizontal: 6, marginBottom: 0 },
+    mobileNavText: { flex: 0, fontSize: 9, textAlign: 'center' },
+    mobileNavIndicator: { width: undefined, height: 3, right: 9, bottom: 0, left: 9, borderRadius: 2 },
+    mobileMenuAccount: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 13, paddingTop: 12, borderTopWidth: 1, borderTopColor: palette.line },
+    mobileMenuProfile: { flex: 1 },
+    mobileMenuEmail: { color: palette.muted, fontSize: 8, fontFamily: fontFamilies.regular, marginTop: 2 },
+    mobileMenuLogout: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.surfaceSubtle },
     gatePage: { flex: 1, backgroundColor: palette.background },
     gateScroll: { flexGrow: 1, justifyContent: 'center', padding: 20 },
     gateCard: { width: '100%', maxWidth: 500, alignSelf: 'center', padding: 25, borderWidth: 1, borderColor: palette.line, borderRadius: 22, backgroundColor: palette.paper },

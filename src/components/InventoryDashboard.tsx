@@ -649,8 +649,8 @@ function createStyles(palette: ThemeColors) {
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   metricCard: {
     flexGrow: 1,
-    flexBasis: 170,
-    minWidth: 150,
+    flexBasis: '47%',
+    minWidth: 0,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
