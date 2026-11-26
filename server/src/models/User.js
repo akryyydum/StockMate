@@ -39,6 +39,18 @@ const userSchema = new mongoose.Schema(
       default: false,
       required: true,
     },
+    currency: {
+      type: String,
+      enum: ['PHP', 'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'SGD'],
+      default: 'PHP',
+      required: true,
+    },
+    sessionDurationMinutes: {
+      type: Number,
+      min: 1,
+      max: 30 * 24 * 60,
+      default: 120,
+    },
   },
   { timestamps: true },
 );

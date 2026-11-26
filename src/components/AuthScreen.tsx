@@ -24,7 +24,7 @@ export function AuthScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.container}>
           <View style={styles.brandRow}>
-            <Image source={require('../../assets/icon.png')} style={styles.brandIcon} />
+            <Image source={require('../../assets/brand-logo.png')} style={styles.brandIcon} />
             <View>
               <Text style={styles.brand}>StockMate</Text>
               <Text style={styles.brandTagline}>Your Inventory, Your Control.</Text>
@@ -43,7 +43,7 @@ export function AuthScreen() {
               </Text>
             </View>
             <View style={styles.heroArt} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              <Image source={require('../../assets/icon.png')} style={styles.heroIcon} />
+              <Image source={require('../../assets/brand-logo.png')} style={styles.heroIcon} />
               <View style={styles.artLabel}>
                 <View style={styles.artDot} />
                 <Text style={styles.artLabelText}>Stock on track</Text>

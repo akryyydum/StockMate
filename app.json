@@ -5,7 +5,7 @@
     "scheme": "stockmate",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/brand-logo.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
@@ -13,9 +13,8 @@
     "android": {
       "package": "com.stockmate.app",
       "adaptiveIcon": {
-        "backgroundColor": "#f86f0b",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#f3efec",
+        "foregroundImage": "./assets/brand-logo.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -28,7 +27,7 @@
       "themeColor": "#f86f0b",
       "backgroundColor": "#ededef",
       "display": "standalone",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/brand-logo.png"
     },
     "plugins": [
       "expo-router",

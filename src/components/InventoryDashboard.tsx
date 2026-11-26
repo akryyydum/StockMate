@@ -10,12 +10,12 @@ import {
   View,
 } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import ArrowDownUp from 'lucide-react-native/icons/arrow-down-up';
+import ArrowLeftRight from 'lucide-react-native/icons/arrow-left-right';
+import Boxes from 'lucide-react-native/icons/boxes';
+import CircleDollarSign from 'lucide-react-native/icons/circle-dollar-sign';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
-import CircleAlert from 'lucide-react-native/icons/circle-alert';
 import Coffee from 'lucide-react-native/icons/coffee';
-import DollarSign from 'lucide-react-native/icons/dollar-sign';
-import Package from 'lucide-react-native/icons/package';
+import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
 import {
   authApi,
   InventoryItem,
@@ -24,10 +24,12 @@ import {
 } from '../auth/authApi';
 import { useAppTheme } from '../ThemeProvider';
 import { fontFamilies, ThemeColors } from '../theme';
+import { createCurrencyFormatter, type CurrencyCode } from '../utils/currency';
 import { LoadingAnimation } from './LoadingAnimation';
 
 type Props = {
   accessToken: string;
+  currencyCode: CurrencyCode;
 };
 
 type ItemForm = {
@@ -74,17 +76,12 @@ const STATUS_LABELS: Record<StatusFilter, string> = {
   'out-of-stock': 'Out of stock',
 };
 
-const currency = new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency: 'PHP',
-  maximumFractionDigits: 2,
-});
-
-export function InventoryDashboard({ accessToken }: Props) {
+export function InventoryDashboard({ accessToken, currencyCode }: Props) {
   const { palette } = useAppTheme();
   const { width } = useWindowDimensions();
   const metricBasis = width >= 980 ? '22%' : width >= 600 ? '30%' : '47%';
   const styles = createStyles(palette);
+  const currency = useMemo(() => createCurrencyFormatter(currencyCode), [currencyCode]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [summary, setSummary] = useState({
     stockValue: 0,
@@ -270,7 +267,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           label="Stock value"
           value={currency.format(summary.stockValue)}
           detail="Current inventory at cost"
-          icon={DollarSign}
+          icon={CircleDollarSign}
           accent="dirty"
           basis={metricBasis}
         />
@@ -278,7 +275,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           label="Low stock items"
           value={String(summary.lowStockItems)}
           detail={summary.outOfStockItems ? `${summary.outOfStockItems} out of stock` : 'At or below minimum'}
-          icon={CircleAlert}
+          icon={TriangleAlert}
           accent="yellow"
           basis={metricBasis}
         />
@@ -286,7 +283,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           label="Total items"
           value={String(summary.totalItems)}
           detail={`${Math.max(0, summary.totalItems - summary.outOfStockItems)} with stock on hand`}
-          icon={Package}
+          icon={Boxes}
           accent="orange"
           basis={metricBasis}
         />
@@ -294,7 +291,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           label="Movements today"
           value={String(summary.movementsToday)}
           detail="Stock ins and outs"
-          icon={ArrowDownUp}
+          icon={ArrowLeftRight}
           accent="ink"
           basis={metricBasis}
         />

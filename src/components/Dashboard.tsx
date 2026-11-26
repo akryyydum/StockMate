@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react-native';
 import Activity from 'lucide-react-native/icons/activity';
+import ArrowLeftRight from 'lucide-react-native/icons/arrow-left-right';
 import ArrowDownToLine from 'lucide-react-native/icons/arrow-down-to-line';
-import ArrowDownUp from 'lucide-react-native/icons/arrow-down-up';
 import ArrowUpFromLine from 'lucide-react-native/icons/arrow-up-from-line';
-import CircleAlert from 'lucide-react-native/icons/circle-alert';
-import DollarSign from 'lucide-react-native/icons/dollar-sign';
+import BadgeCheck from 'lucide-react-native/icons/badge-check';
+import Boxes from 'lucide-react-native/icons/boxes';
+import CircleDollarSign from 'lucide-react-native/icons/circle-dollar-sign';
 import LogIn from 'lucide-react-native/icons/log-in';
-import Package from 'lucide-react-native/icons/package';
-import PackageCheck from 'lucide-react-native/icons/package-check';
 import PackagePlus from 'lucide-react-native/icons/package-plus';
 import Pencil from 'lucide-react-native/icons/pencil';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
+import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
 import UserPlus from 'lucide-react-native/icons/user-plus';
 import UsersRound from 'lucide-react-native/icons/users-round';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -30,24 +30,21 @@ import {
 import { authApi, ActivityPage, DashboardActivity, DashboardOverview } from '../auth/authApi';
 import { useAppTheme } from '../ThemeProvider';
 import { fontFamilies, ThemeColors } from '../theme';
+import { createCurrencyFormatter, type CurrencyCode } from '../utils/currency';
 import { LoadingAnimation } from './LoadingAnimation';
 
 type Props = {
   accessToken: string;
+  currencyCode: CurrencyCode;
 };
 
-const currency = new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency: 'PHP',
-  maximumFractionDigits: 2,
-});
-
-export function Dashboard({ accessToken }: Props) {
+export function Dashboard({ accessToken, currencyCode }: Props) {
   const { palette } = useAppTheme();
   const { width } = useWindowDimensions();
   const isNarrow = width < 600;
   const metricBasis = width >= 1250 ? '15%' : width >= 760 ? '30%' : '47%';
   const styles = createStyles(palette);
+  const currency = useMemo(() => createCurrencyFormatter(currencyCode), [currencyCode]);
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,11 +131,11 @@ export function Dashboard({ accessToken }: Props) {
       {summary ? (
         <>
           <View style={styles.metrics}>
-            <Metric basis={metricBasis} label="Stock value" value={currency.format(summary.stockValue)} hint="Current value at cost" accent="orange" icon={DollarSign} />
-            <Metric basis={metricBasis} label="Total items" value={String(summary.totalItems)} hint={`${summary.newItemsThisWeek} added this week`} accent="yellow" icon={Package} />
-            <Metric basis={metricBasis} label="Low stock" value={String(summary.lowStockItems)} hint={`${summary.outOfStockItems} currently out of stock`} accent="warning" icon={CircleAlert} />
-            <Metric basis={metricBasis} label="Stock movements today" value={String(summary.movementsToday)} hint={`${summary.stockInsToday} in · ${summary.stockOutsToday} out`} accent="neutral" icon={ArrowDownUp} />
-            <Metric basis={metricBasis} label="In stock" value={String(summary.inStockItems)} hint={`${total ? Math.round((summary.inStockItems / total) * 100) : 0}% of tracked items`} accent="yellow" icon={PackageCheck} />
+            <Metric basis={metricBasis} label="Stock value" value={currency.format(summary.stockValue)} hint="Current value at cost" accent="orange" icon={CircleDollarSign} />
+            <Metric basis={metricBasis} label="Total items" value={String(summary.totalItems)} hint={`${summary.newItemsThisWeek} added this week`} accent="yellow" icon={Boxes} />
+            <Metric basis={metricBasis} label="Low stock" value={String(summary.lowStockItems)} hint={`${summary.outOfStockItems} currently out of stock`} accent="warning" icon={TriangleAlert} />
+            <Metric basis={metricBasis} label="Stock movements today" value={String(summary.movementsToday)} hint={`${summary.stockInsToday} in · ${summary.stockOutsToday} out`} accent="neutral" icon={ArrowLeftRight} />
+            <Metric basis={metricBasis} label="In stock" value={String(summary.inStockItems)} hint={`${total ? Math.round((summary.inStockItems / total) * 100) : 0}% of tracked items`} accent="yellow" icon={BadgeCheck} />
             <Metric basis={metricBasis} label="Team accounts" value={String(summary.activeUsers)} hint="Accounts with inventory access" accent="neutral" icon={UsersRound} />
           </View>
 
@@ -378,7 +375,7 @@ function Metric({
       <View style={styles.metricTop}>
         <Text style={styles.metricLabel}>{label}</Text>
         <View style={[styles.metricIcon, styles[`accent_${accent}`]]}>
-          <Icon size={17} color={accent === 'warning' ? palette.statusLowText : accent === 'neutral' ? palette.muted : accent === 'yellow' ? palette.statusInText : palette.pumpkinOrange} strokeWidth={1.9} />
+          <Icon size={19} color={accent === 'yellow' ? palette.statusInText : '#fff'} strokeWidth={2} />
         </View>
       </View>
       <Text numberOfLines={1} adjustsFontSizeToFit style={styles.metricValue}>{value}</Text>

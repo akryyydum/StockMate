@@ -5,9 +5,10 @@ import { once } from 'node:events';
 process.env.JWT_ACCESS_SECRET = 'test-secret-that-is-long-enough-for-jwt-signing';
 process.env.CORS_ORIGINS = 'http://localhost:8081';
 
-const { app } = await import('../src/app.js');
+const { app, settingsSchema } = await import('../src/app.js');
 const { ActivityLog } = await import('../src/models/ActivityLog.js');
 const { InventoryItem } = await import('../src/models/InventoryItem.js');
+const { RefreshToken } = await import('../src/models/RefreshToken.js');
 const { StockMovement } = await import('../src/models/StockMovement.js');
 const { User } = await import('../src/models/User.js');
 let server;
@@ -29,6 +30,40 @@ describe('authentication API input handling', () => {
     for (const model of [User, InventoryItem, StockMovement, ActivityLog]) {
       assert.equal(model.schema.path('accountId').isRequired, true, `${model.modelName} requires accountId`);
     }
+    assert.equal(User.schema.path('currency').getDefault(), 'PHP');
+    assert.deepEqual(User.schema.path('currency').enumValues, [
+      'PHP',
+      'USD',
+      'EUR',
+      'GBP',
+      'JPY',
+      'CAD',
+      'AUD',
+      'SGD',
+    ]);
+    assert.equal(User.schema.path('sessionDurationMinutes').getDefault(), 120);
+    assert.equal(RefreshToken.schema.path('expiresAt').options.default, null);
+    assert.equal(Boolean(RefreshToken.schema.path('expiresAt').isRequired), false);
+  });
+
+  it('accepts supported session durations and bounds custom durations', () => {
+    for (const sessionDurationMinutes of [null, 1, 30, 60, 120, 43_200]) {
+      assert.equal(
+        settingsSchema.safeParse({ sessionDurationMinutes }).success,
+        true,
+        `session duration ${sessionDurationMinutes} should be valid`,
+      );
+    }
+
+    for (const sessionDurationMinutes of [0, -1, 1.5, 43_201]) {
+      assert.equal(
+        settingsSchema.safeParse({ sessionDurationMinutes }).success,
+        false,
+        `session duration ${sessionDurationMinutes} should be rejected`,
+      );
+    }
+
+    assert.equal(settingsSchema.safeParse({}).success, false);
   });
 
   it('reports the health endpoint without connecting to MongoDB', async () => {
@@ -78,6 +113,18 @@ describe('authentication API input handling', () => {
   it('requires authentication to read paginated activity history', async () => {
     const response = await fetch(`${baseUrl}/api/activities?page=2`);
     assert.equal(response.status, 401);
+  });
+
+  it('requires authentication to read or update account settings', async () => {
+    const responses = await Promise.all([
+      fetch(`${baseUrl}/api/settings`),
+      fetch(`${baseUrl}/api/settings`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ currency: 'USD' }),
+      }),
+    ]);
+    assert.deepEqual(responses.map((response) => response.status), [401, 401]);
   });
 
   it('requires authentication before creating users', async () => {

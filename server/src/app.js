@@ -16,7 +16,8 @@ import { User } from './models/User.js';
 
 const app = express();
 const ACCESS_TOKEN_TTL = '15m';
-const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_SESSION_DURATION_MINUTES = 120;
+const MAX_SESSION_DURATION_MINUTES = 30 * 24 * 60;
 const PASSWORD_HASH_ROUNDS = 12;
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:8081,http://localhost:8082,http://localhost:19006')
@@ -110,6 +111,15 @@ const refreshSchema = z.object({
 const activityPageSchema = z.object({
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
 });
+const settingsSchema = z.object({
+  currency: z.enum(['PHP', 'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'SGD']).optional(),
+  sessionDurationMinutes: z.number()
+    .int()
+    .min(1)
+    .max(MAX_SESSION_DURATION_MINUTES)
+    .nullable()
+    .optional(),
+}).refine((value) => Object.keys(value).length > 0);
 
 function publicUser(user) {
   return {
@@ -175,10 +185,30 @@ async function createRefreshToken(userId, expiresAt) {
   return token;
 }
 
-async function createSession(user, expiresAt = new Date(Date.now() + SESSION_TTL_MS)) {
+async function getSessionExpiry(user) {
+  const accountId = user.accountId ?? user.id;
+  const account = await User.findOne({
+    _id: accountId,
+    accountId,
+    role: 'superadmin',
+  }).select('sessionDurationMinutes');
+  if (!account) {
+    throw new Error('The account session settings could not be found.');
+  }
+
+  const durationMinutes = account.sessionDurationMinutes === undefined
+    ? DEFAULT_SESSION_DURATION_MINUTES
+    : account.sessionDurationMinutes;
+  return durationMinutes === null
+    ? null
+    : new Date(Date.now() + durationMinutes * 60 * 1000);
+}
+
+async function createSession(user, expiresAt) {
+  const sessionExpiresAt = expiresAt === undefined ? await getSessionExpiry(user) : expiresAt;
   const [accessToken, refreshToken] = await Promise.all([
     Promise.resolve(createAccessToken(user)),
-    createRefreshToken(user.id, expiresAt),
+    createRefreshToken(user.id, sessionExpiresAt),
   ]);
   return {
     accessToken,
@@ -306,7 +336,7 @@ app.post('/api/auth/refresh', async (req, res) => {
   const oldToken = await RefreshToken.findOneAndDelete({
     tokenHash: hashRefreshToken(input.refreshToken),
   });
-  if (!oldToken || oldToken.expiresAt <= new Date()) {
+  if (!oldToken || (oldToken.expiresAt && oldToken.expiresAt <= new Date())) {
     res.status(401).json({ message: 'Your session has expired. Please sign in again.' });
     return;
   }
@@ -370,6 +400,65 @@ app.put('/api/auth/credentials', requireAccessToken, requireCurrentUser, async (
   await RefreshToken.deleteMany({ userId: user.id });
   res.json(await createSession(user));
 });
+
+app.get(
+  '/api/settings',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  requireSuperadmin,
+  async (req, res) => {
+    const account = await User.findOne({
+      _id: req.authUser.accountId,
+      accountId: req.authUser.accountId,
+      role: 'superadmin',
+    });
+    if (!account) {
+      res.status(404).json({ message: 'Account settings not found.' });
+      return;
+    }
+    res.json({
+      currency: account.currency,
+      sessionDurationMinutes: account.sessionDurationMinutes === undefined
+        ? DEFAULT_SESSION_DURATION_MINUTES
+        : account.sessionDurationMinutes,
+    });
+  },
+);
+
+app.patch(
+  '/api/settings',
+  requireAccessToken,
+  requireCurrentUser,
+  requireUpdatedCredentials,
+  requireSuperadmin,
+  async (req, res) => {
+    const input = validate(settingsSchema, req.body, res);
+    if (!input) return;
+
+    const account = await User.findOne({
+      _id: req.authUser.accountId,
+      accountId: req.authUser.accountId,
+      role: 'superadmin',
+    });
+    if (!account) {
+      res.status(404).json({ message: 'Account settings not found.' });
+      return;
+    }
+
+    if (input.currency !== undefined) account.currency = input.currency;
+    if (input.sessionDurationMinutes !== undefined) {
+      account.sessionDurationMinutes = input.sessionDurationMinutes;
+    }
+    await account.save();
+    res.json({
+      currency: account.currency,
+      sessionDurationMinutes: account.sessionDurationMinutes === undefined
+        ? DEFAULT_SESSION_DURATION_MINUTES
+        : account.sessionDurationMinutes,
+    });
+  },
+);
 
 app.get(
   '/api/users',
@@ -824,4 +913,4 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-export { app };
+export { app, settingsSchema };

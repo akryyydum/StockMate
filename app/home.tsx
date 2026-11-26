@@ -1,11 +1,13 @@
 import { Redirect, useRouter } from 'expo-router';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import Check from 'lucide-react-native/icons/check';
 import LayoutDashboard from 'lucide-react-native/icons/layout-dashboard';
 import LogOut from 'lucide-react-native/icons/log-out';
 import Menu from 'lucide-react-native/icons/menu';
 import Moon from 'lucide-react-native/icons/moon';
 import Package from 'lucide-react-native/icons/package';
+import Settings2 from 'lucide-react-native/icons/settings-2';
 import Sun from 'lucide-react-native/icons/sun';
 import UsersRound from 'lucide-react-native/icons/users-round';
 import X from 'lucide-react-native/icons/x';
@@ -23,6 +25,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { authApi } from '../src/auth/authApi';
 import { useAuth } from '../src/auth/AuthProvider';
 import { Dashboard } from '../src/components/Dashboard';
 import { InventoryDashboard } from '../src/components/InventoryDashboard';
@@ -30,6 +33,7 @@ import { LoadingAnimation } from '../src/components/LoadingAnimation';
 import { UserManagement } from '../src/components/UserManagement';
 import { useAppTheme } from '../src/ThemeProvider';
 import { fontFamilies, ThemeColors } from '../src/theme';
+import { createCurrencyFormatter, CURRENCY_OPTIONS, type CurrencyCode } from '../src/utils/currency';
 
 type Section = 'dashboard' | 'inventory' | 'users';
 
@@ -50,7 +54,75 @@ export default function HomeScreen() {
   const [email, setEmail] = useState(user?.email ?? '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [currencyCode, setCurrencyCode] = useState<CurrencyCode>('PHP');
+  const [draftCurrency, setDraftCurrency] = useState<CurrencyCode>('PHP');
+  const [sessionDurationMinutes, setSessionDurationMinutes] = useState<number | null>(120);
+  const [draftSessionDurationMinutes, setDraftSessionDurationMinutes] = useState<number | null>(120);
+  const [customSessionDuration, setCustomSessionDuration] = useState(false);
+  const [customSessionMinutes, setCustomSessionMinutes] = useState('180');
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [sessionDurationError, setSessionDurationError] = useState<string | null>(null);
   const styles = createStyles(palette);
+
+  useEffect(() => {
+    if (!accessToken || user?.role !== 'superadmin') return;
+    let active = true;
+    authApi.settings(accessToken)
+      .then((settings) => {
+        if (active) {
+          setCurrencyCode(settings.currency);
+          setDraftCurrency(settings.currency);
+          setSessionDurationMinutes(settings.sessionDurationMinutes);
+          setDraftSessionDurationMinutes(settings.sessionDurationMinutes);
+          setSettingsError(null);
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setSettingsError(
+            loadError instanceof Error ? loadError.message : 'Unable to load account settings.',
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setSettingsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessToken, user?.role]);
+
+  async function reloadSettings() {
+    if (!accessToken) return;
+    setSettingsLoading(true);
+    setSettingsError(null);
+    try {
+      const settings = await authApi.settings(accessToken);
+      setCurrencyCode(settings.currency);
+      setDraftCurrency(settings.currency);
+      setSessionDurationMinutes(settings.sessionDurationMinutes);
+      setDraftSessionDurationMinutes(settings.sessionDurationMinutes);
+      setCustomSessionDuration(
+        settings.sessionDurationMinutes !== null &&
+          ![30, 60, 120].includes(settings.sessionDurationMinutes),
+      );
+      if (
+        settings.sessionDurationMinutes !== null &&
+        ![30, 60, 120].includes(settings.sessionDurationMinutes)
+      ) {
+        setCustomSessionMinutes(String(settings.sessionDurationMinutes));
+      }
+    } catch (loadError) {
+      setSettingsError(
+        loadError instanceof Error ? loadError.message : 'Unable to load account settings.',
+      );
+    } finally {
+      setSettingsLoading(false);
+    }
+  }
 
   useEffect(() => {
     Animated.timing(sidebarWidth, {
@@ -122,6 +194,49 @@ export default function HomeScreen() {
     setMenuOpen(false);
   }
 
+  function openSettings() {
+    setMenuOpen(false);
+    setDraftCurrency(currencyCode);
+    setDraftSessionDurationMinutes(sessionDurationMinutes);
+    const isCustom = sessionDurationMinutes !== null && ![30, 60, 120].includes(sessionDurationMinutes);
+    setCustomSessionDuration(isCustom);
+    setCustomSessionMinutes(isCustom ? String(sessionDurationMinutes) : '180');
+    setSettingsVisible(true);
+    setSessionDurationError(null);
+  }
+
+  async function saveSettings() {
+    if (!accessToken) return;
+    const nextSessionDuration = customSessionDuration
+      ? Number(customSessionMinutes)
+      : draftSessionDurationMinutes;
+    if (
+      customSessionDuration &&
+      (!Number.isInteger(nextSessionDuration) || nextSessionDuration === null ||
+        nextSessionDuration < 1 || nextSessionDuration > 30 * 24 * 60)
+    ) {
+      setSessionDurationError('Enter a whole number from 1 to 43,200 minutes (30 days).');
+      return;
+    }
+
+    setSettingsSaving(true);
+    setSettingsError(null);
+    setSessionDurationError(null);
+    try {
+      const settings = await authApi.updateSettings(accessToken, {
+        currency: draftCurrency,
+        sessionDurationMinutes: nextSessionDuration,
+      });
+      setCurrencyCode(settings.currency);
+      setSessionDurationMinutes(settings.sessionDurationMinutes);
+      setSettingsVisible(false);
+    } catch (saveError) {
+      setSettingsError(saveError instanceof Error ? saveError.message : 'Unable to save account settings.');
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
   if (signedInUser.mustChangeCredentials) {
     return (
       <SafeAreaView style={styles.gatePage}>
@@ -162,23 +277,31 @@ export default function HomeScreen() {
             busy={busy}
             collapsed={sidebarCollapsed}
             onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            onOpenSettings={openSettings}
           />
         </Animated.View>
-      ) : (
-        <MobileHeader onOpenMenu={() => setMenuOpen(true)} />
-      )}
+      ) : null}
 
       <View style={styles.main}>
         <View style={styles.topbar}>
           <View>
-            <Text style={styles.topbarEyebrow}>STOCKMATE CAFÉ</Text>
-            <Text style={styles.topbarTitle}>
-              {section === 'dashboard'
-                ? 'Dashboard'
-                : section === 'inventory'
-                  ? 'Inventory overview'
-                  : 'Team access'}
-            </Text>
+            {isDesktop ? (
+              <>
+                <Text style={styles.topbarEyebrow}>STOCKMATE CAFÉ</Text>
+                <Text style={styles.topbarTitle}>
+                  {section === 'dashboard'
+                    ? 'Dashboard'
+                    : section === 'inventory'
+                      ? 'Inventory overview'
+                      : 'Team access'}
+                </Text>
+              </>
+            ) : (
+              <View style={styles.mobileTopbarBrand}>
+                <Image source={require('../assets/brand-logo.png')} style={styles.mobileTopbarLogo} />
+                <Text style={styles.topbarTitle}>StockMate</Text>
+              </View>
+            )}
           </View>
           <Pressable
             accessibilityRole="button"
@@ -199,9 +322,9 @@ export default function HomeScreen() {
         >
           <PageTransition key={section}>
             {section === 'dashboard' ? (
-              <Dashboard accessToken={accessToken} />
+              <Dashboard accessToken={accessToken} currencyCode={currencyCode} />
             ) : section === 'inventory' ? (
-              <InventoryDashboard accessToken={accessToken} />
+              <InventoryDashboard accessToken={accessToken} currencyCode={currencyCode} />
             ) : (
               <UserManagement accessToken={accessToken} role={signedInUser.role} currentUserId={signedInUser.id} />
             )}
@@ -209,6 +332,35 @@ export default function HomeScreen() {
           <Text style={styles.footer}>StockMate · Your Inventory, Your Control.</Text>
         </ScrollView>
       </View>
+
+      {!isDesktop ? (
+        <View style={styles.mobileBottomNav}>
+          <MobileTabButton
+            icon={LayoutDashboard}
+            label="Dashboard"
+            selected={section === 'dashboard'}
+            onPress={() => navigate('dashboard')}
+          />
+          <MobileTabButton
+            icon={Package}
+            label="Inventory"
+            selected={section === 'inventory'}
+            onPress={() => navigate('inventory')}
+          />
+          <MobileTabButton
+            icon={UsersRound}
+            label="Team"
+            selected={section === 'users'}
+            onPress={() => navigate('users')}
+          />
+          <MobileTabButton
+            icon={Menu}
+            label="Menu"
+            selected={menuOpen}
+            onPress={() => setMenuOpen(true)}
+          />
+        </View>
+      ) : null}
 
       {!isDesktop ? (
         <Modal
@@ -220,22 +372,235 @@ export default function HomeScreen() {
           <View style={styles.mobileMenuBackdrop}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Close navigation"
+              accessibilityLabel="Close menu"
               onPress={() => setMenuOpen(false)}
               style={styles.menuDismiss}
             />
-            <MobileNavigationMenu
+            <MobileAccountMenu
               user={signedInUser}
-              section={section}
-              onNavigate={navigate}
               onLogout={() => void handleLogout()}
               onClose={() => setMenuOpen(false)}
               busy={busy}
+              onOpenSettings={openSettings}
               progress={mobileMenuProgress}
             />
           </View>
         </Modal>
       ) : null}
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setSettingsVisible(false)}
+        transparent
+        visible={settingsVisible}
+      >
+        <View style={styles.settingsBackdrop}>
+          <ScrollView
+            contentContainerStyle={styles.settingsScroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsHeader}>
+                <View style={styles.settingsTitleGroup}>
+                  <View style={styles.settingsTitleIcon}>
+                    <Settings2 size={18} color={palette.dirtyOrange} strokeWidth={1.9} />
+                  </View>
+                  <View>
+                    <Text style={styles.settingsTitle}>Account settings</Text>
+                    <Text style={styles.settingsSubtitle}>Customize how your inventory is displayed.</Text>
+                  </View>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close settings"
+                  onPress={() => setSettingsVisible(false)}
+                  style={({ pressed }) => [styles.settingsClose, pressed && styles.navPressed]}
+                >
+                  <X size={17} color={palette.muted} strokeWidth={1.9} />
+                </Pressable>
+              </View>
+              <View style={styles.settingsSection}>
+                <Text style={styles.settingsLabel}>DISPLAY CURRENCY</Text>
+                <Text style={styles.settingsDescription}>
+                  Changes the currency format shown for stock values and item costs. It does not convert saved amounts.
+                </Text>
+                {settingsLoading ? (
+                  <View style={styles.settingsLoading}>
+                    <LoadingAnimation label="Loading account settings" size={28} />
+                  </View>
+                ) : (
+                  <View style={styles.currencyOptions}>
+                    {CURRENCY_OPTIONS.map((option) => {
+                      const selected = draftCurrency === option.code;
+                      return (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          disabled={Boolean(settingsError)}
+                          key={option.code}
+                          onPress={() => setDraftCurrency(option.code)}
+                          style={[
+                            styles.currencyOption,
+                            selected && styles.currencyOptionSelected,
+                            settingsError && styles.currencyOptionDisabled,
+                          ]}
+                        >
+                          <Text style={[styles.currencyCode, selected && styles.currencyCodeSelected]}>
+                            {option.code}
+                          </Text>
+                          <Text style={styles.currencyLabel}>{option.label}</Text>
+                          {selected ? <Check size={15} color={palette.dirtyOrange} strokeWidth={2} /> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+                {settingsError ? (
+                  <View style={styles.settingsErrorRow}>
+                    <Text accessibilityRole="alert" style={styles.settingsError}>{settingsError}</Text>
+                    <Pressable accessibilityRole="button" onPress={() => void reloadSettings()}>
+                      <Text style={styles.settingsRetry}>Try again</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {!settingsLoading && !settingsError ? (
+                  <Text style={styles.currencyPreview}>
+                    Example: {createCurrencyFormatter(draftCurrency).format(1234.56)}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.settingsSection}>
+                <Text style={styles.settingsLabel}>SESSION DURATION</Text>
+                <Text style={styles.settingsDescription}>
+                  Fixed lifetime from sign-in; activity does not extend it. Changes apply to new sessions, while current sessions keep their existing expiry.
+                </Text>
+                <View style={styles.sessionDurationOptions}>
+                  {[
+                    { label: 'Off (no expiry)', value: null },
+                    { label: '30 minutes', value: 30 },
+                    { label: '1 hour', value: 60 },
+                    { label: '2 hours', value: 120 },
+                  ].map((option) => {
+                    const selected = !customSessionDuration &&
+                      draftSessionDurationMinutes === option.value;
+                    return (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        disabled={Boolean(settingsError)}
+                        key={option.label}
+                        onPress={() => {
+                          setCustomSessionDuration(false);
+                          setDraftSessionDurationMinutes(option.value);
+                        }}
+                        style={[
+                          styles.sessionDurationOption,
+                          selected && styles.sessionDurationOptionSelected,
+                          settingsError && styles.currencyOptionDisabled,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sessionDurationLabel,
+                            selected && styles.sessionDurationLabelSelected,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                        {selected ? <Check size={15} color={palette.dirtyOrange} strokeWidth={2} /> : null}
+                      </Pressable>
+                    );
+                  })}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: customSessionDuration }}
+                    disabled={Boolean(settingsError)}
+                    onPress={() => {
+                      setCustomSessionDuration(true);
+                      setCustomSessionMinutes(
+                        draftSessionDurationMinutes !== null &&
+                          ![30, 60, 120].includes(draftSessionDurationMinutes)
+                          ? String(draftSessionDurationMinutes)
+                          : '180',
+                      );
+                    }}
+                    style={[
+                      styles.sessionDurationOption,
+                      customSessionDuration && styles.sessionDurationOptionSelected,
+                      settingsError && styles.currencyOptionDisabled,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.sessionDurationLabel,
+                        customSessionDuration && styles.sessionDurationLabelSelected,
+                      ]}
+                    >
+                      Custom
+                    </Text>
+                    {customSessionDuration ? <Check size={15} color={palette.dirtyOrange} strokeWidth={2} /> : null}
+                  </Pressable>
+                </View>
+                {customSessionDuration ? (
+                  <View style={styles.customSessionField}>
+                    <Text style={styles.customSessionLabel}>Duration in minutes (1-43,200)</Text>
+                    <TextInput
+                      accessibilityLabel="Custom session duration in minutes"
+                      editable={!settingsError}
+                      keyboardType="number-pad"
+                      maxLength={5}
+                      onChangeText={(value) => {
+                        setCustomSessionMinutes(value);
+                        setSessionDurationError(null);
+                      }}
+                      placeholder="Enter minutes"
+                      placeholderTextColor={palette.muted}
+                      style={styles.customSessionInput}
+                      value={customSessionMinutes}
+                    />
+                    <Text style={styles.customSessionHint}>
+                      Maximum custom duration is 30 days. Choose Off to disable automatic sign-out.
+                    </Text>
+                    {sessionDurationError ? (
+                      <Text accessibilityRole="alert" style={styles.settingsError}>
+                        {sessionDurationError}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : draftSessionDurationMinutes === null ? (
+                  <Text style={styles.sessionWarning}>
+                    Sessions remain active until users sign out or an administrator revokes them.
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.settingsActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={settingsSaving}
+                  onPress={() => setSettingsVisible(false)}
+                  style={({ pressed }) => [styles.settingsCancel, pressed && styles.navPressed]}
+                >
+                  <Text style={styles.settingsCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={settingsLoading || settingsSaving || Boolean(settingsError) || Boolean(sessionDurationError)}
+                  onPress={() => void saveSettings()}
+                  style={({ pressed }) => [
+                    styles.settingsSave,
+                    (settingsLoading || settingsSaving || Boolean(settingsError) || Boolean(sessionDurationError)) && styles.settingsSaveDisabled,
+                    pressed && !settingsSaving && styles.primaryButtonPressed,
+                  ]}
+                >
+                  {settingsSaving
+                    ? <LoadingAnimation size={18} />
+                    : <Text style={styles.settingsSaveText}>Save changes</Text>}
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -245,7 +610,7 @@ function Brand({ compact = false, showText = true }: { compact?: boolean; showTe
   const styles = createStyles(palette);
   return (
     <View style={[styles.brand, compact && styles.brandCompact]}>
-      <Image source={require('../assets/icon.png')} style={styles.brandIcon} />
+      <Image source={require('../assets/brand-logo.png')} style={styles.brandIcon} />
       {showText ? (
         <View>
           <Text style={styles.brandName}>StockMate</Text>
@@ -256,16 +621,35 @@ function Brand({ compact = false, showText = true }: { compact?: boolean; showTe
   );
 }
 
-function MobileHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
+function MobileTabButton({
+  icon: Icon,
+  label,
+  selected,
+  onPress,
+}: {
+  icon: typeof LayoutDashboard;
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
   return (
-    <View style={styles.mobileHeader}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Open navigation" onPress={onOpenMenu} style={styles.menuButton}>
-        <Menu size={19} color={palette.dirtyOrange} strokeWidth={2} />
-      </Pressable>
-      <Brand compact />
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.mobileTab, pressed && styles.navPressed]}
+    >
+      <Icon
+        size={20}
+        color={selected ? palette.pumpkinOrange : palette.muted}
+        strokeWidth={selected ? 2.2 : 1.8}
+      />
+      <Text style={[styles.mobileTabLabel, selected && styles.mobileTabLabelSelected]}>{label}</Text>
+      {selected ? <View style={styles.mobileTabIndicator} /> : null}
+    </Pressable>
   );
 }
 
@@ -300,6 +684,7 @@ function Sidebar({
   busy,
   collapsed,
   onToggleCollapsed,
+  onOpenSettings,
 }: {
   user: { name: string; email: string; role: 'admin' | 'superadmin' };
   section: Section;
@@ -308,6 +693,7 @@ function Sidebar({
   busy: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  onOpenSettings: () => void;
 }) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
@@ -361,6 +747,23 @@ function Sidebar({
           ) : null}
         </View>
         {!collapsed ? <Text numberOfLines={1} style={styles.profileEmail}>{user.email}</Text> : null}
+        {user.role === 'superadmin' ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            onPress={onOpenSettings}
+            style={({ pressed }) => [
+              styles.settingsButton,
+              collapsed && styles.collapsedLogoutButton,
+              pressed && styles.logoutPressed,
+            ]}
+          >
+            <View style={styles.logoutContent}>
+              <Settings2 size={15} color={palette.muted} strokeWidth={1.9} />
+              {!collapsed ? <Text style={styles.logoutText}>Settings</Text> : null}
+            </View>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Sign out"
@@ -390,14 +793,12 @@ function NavButton({
   selected,
   onPress,
   collapsed,
-  mobile = false,
 }: {
   icon: typeof LayoutDashboard;
   label: string;
   selected: boolean;
   onPress: () => void;
   collapsed: boolean;
-  mobile?: boolean;
 }) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
@@ -410,7 +811,6 @@ function NavButton({
       style={({ pressed }) => [
         styles.navButton,
         collapsed && styles.collapsedNavButton,
-        mobile && styles.mobileNavButton,
         selected && styles.navSelected,
         pressed && styles.navPressed,
       ]}
@@ -421,31 +821,27 @@ function NavButton({
         strokeWidth={selected ? 2.2 : 1.8}
       />
       {!collapsed ? (
-        <Text style={[styles.navText, mobile && styles.mobileNavText, selected && styles.navTextSelected]}>
-          {label}
-        </Text>
+        <Text style={[styles.navText, selected && styles.navTextSelected]}>{label}</Text>
       ) : null}
-      {selected ? <View style={[styles.navIndicator, mobile && styles.mobileNavIndicator]} /> : null}
+      {selected ? <View style={styles.navIndicator} /> : null}
     </Pressable>
   );
 }
 
-function MobileNavigationMenu({
+function MobileAccountMenu({
   user,
-  section,
-  onNavigate,
   onLogout,
   onClose,
   busy,
   progress,
+  onOpenSettings,
 }: {
   user: { name: string; email: string; role: 'admin' | 'superadmin' };
-  section: Section;
-  onNavigate: (section: Section) => void;
   onLogout: () => void;
   onClose: () => void;
   busy: boolean;
   progress: Animated.Value;
+  onOpenSettings: () => void;
 }) {
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
@@ -455,64 +851,50 @@ function MobileNavigationMenu({
         styles.mobileMenuPanel,
         {
           transform: [
-            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-260, 0] }) },
+            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [320, 0] }) },
           ],
         },
       ]}
     >
       <View style={styles.mobileMenuHeading}>
-        <Text style={styles.mobileMenuCaption}>WORKSPACE</Text>
+        <View style={styles.mobileAccountIdentity}>
+          <View style={styles.profileAvatar}>
+            <Text style={styles.profileAvatarText}>{user.name.slice(0, 1).toUpperCase()}</Text>
+          </View>
+          <View style={styles.mobileMenuProfile}>
+            <Text numberOfLines={1} style={styles.profileName}>{user.name}</Text>
+            <Text numberOfLines={1} style={styles.mobileMenuEmail}>{user.email}</Text>
+          </View>
+        </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Close navigation"
+          accessibilityLabel="Close menu"
           onPress={onClose}
           style={styles.mobileMenuClose}
         >
           <X size={18} color={palette.muted} strokeWidth={1.9} />
         </Pressable>
       </View>
-      <View style={styles.mobileMenuNav}>
-        <NavButton
-          icon={LayoutDashboard}
-          label="Dashboard"
-          collapsed={false}
-          mobile
-          selected={section === 'dashboard'}
-          onPress={() => onNavigate('dashboard')}
-        />
-        <NavButton
-          icon={Package}
-          label="Inventory"
-          collapsed={false}
-          mobile
-          selected={section === 'inventory'}
-          onPress={() => onNavigate('inventory')}
-        />
-        <NavButton
-          icon={UsersRound}
-          label="Team"
-          collapsed={false}
-          mobile
-          selected={section === 'users'}
-          onPress={() => onNavigate('users')}
-        />
-      </View>
-      <View style={styles.mobileMenuAccount}>
-        <View style={styles.profileAvatar}>
-          <Text style={styles.profileAvatarText}>{user.name.slice(0, 1).toUpperCase()}</Text>
-        </View>
-        <View style={styles.mobileMenuProfile}>
-          <Text numberOfLines={1} style={styles.profileName}>{user.name}</Text>
-          <Text numberOfLines={1} style={styles.mobileMenuEmail}>{user.email}</Text>
-        </View>
+      {user.role === 'superadmin' ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenSettings}
+          style={({ pressed }) => [styles.mobileMenuAction, pressed && styles.logoutPressed]}
+        >
+          <Settings2 size={16} color={palette.muted} strokeWidth={1.9} />
+          <Text style={styles.logoutText}>Settings</Text>
+        </Pressable>
+      ) : null}
+      <View style={styles.mobileMenuActions}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Sign out"
           disabled={busy}
           onPress={onLogout}
-          style={({ pressed }) => [styles.mobileMenuLogout, pressed && styles.navPressed]}
+          style={({ pressed }) => [styles.mobileMenuAction, styles.mobileSignOut, pressed && styles.navPressed]}
         >
-          {busy ? <LoadingAnimation size={18} /> : <LogOut size={17} color={palette.muted} strokeWidth={1.9} />}
+          {busy ? <LoadingAnimation size={18} /> : <LogOut size={16} color={palette.danger} strokeWidth={1.9} />}
+          <Text style={styles.mobileSignOutText}>{busy ? 'Signing out...' : 'Sign out'}</Text>
         </Pressable>
       </View>
     </Animated.View>
@@ -615,6 +997,7 @@ function createStyles(palette: ThemeColors) {
     profileName: { color: palette.ink, fontSize: 9, fontFamily: fontFamilies.semiBold },
     profileRole: { color: palette.muted, fontSize: 7, letterSpacing: 0.6, fontFamily: fontFamilies.medium, marginTop: 3 },
     profileEmail: { color: palette.muted, fontSize: 8, fontFamily: fontFamilies.regular, marginTop: 9, paddingLeft: 40 },
+    settingsButton: { minHeight: 36, justifyContent: 'center', marginTop: 10, paddingHorizontal: 10, borderRadius: 8 },
     logoutButton: { minHeight: 36, justifyContent: 'center', marginTop: 10, paddingHorizontal: 10, borderRadius: 8 },
     collapsedLogoutButton: { alignItems: 'center', paddingHorizontal: 0 },
     logoutPressed: { backgroundColor: palette.surfaceSubtle },
@@ -624,27 +1007,70 @@ function createStyles(palette: ThemeColors) {
     topbar: { minHeight: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 26, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper },
     topbarEyebrow: { color: palette.muted, fontSize: 7, letterSpacing: 1.1, fontFamily: fontFamilies.semiBold },
     topbarTitle: { color: palette.ink, fontSize: 15, fontFamily: fontFamilies.semiBold, marginTop: 3 },
+    mobileTopbarBrand: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+    mobileTopbarLogo: { width: 34, height: 34, borderRadius: 10 },
     themeToggle: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surfaceSubtle },
     themeToggleIcon: { color: palette.dirtyOrange, fontSize: 21, lineHeight: 26 },
     contentScroll: { flex: 1 },
     content: { width: '100%', alignSelf: 'stretch', padding: 20, gap: 17 },
     footer: { color: palette.muted, fontSize: 8, textAlign: 'center', fontFamily: fontFamilies.regular, marginTop: 2 },
-    mobileHeader: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper },
-    menuButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: palette.accentSoft },
-    mobileMenuBackdrop: { flex: 1, backgroundColor: 'rgba(33, 29, 26, 0.36)' },
+    mobileBottomNav: { minHeight: 64, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: palette.line, backgroundColor: palette.paper },
+    mobileTab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: 7 },
+    mobileTabLabel: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium },
+    mobileTabLabelSelected: { color: palette.dirtyOrange, fontFamily: fontFamilies.semiBold },
+    mobileTabIndicator: { position: 'absolute', top: 0, width: 28, height: 2, borderRadius: 2, backgroundColor: palette.pumpkinOrange },
+    mobileMenuBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(33, 29, 26, 0.42)' },
     menuDismiss: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-    mobileMenuPanel: { width: '100%', paddingTop: 32, paddingBottom: 15, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: palette.line, backgroundColor: palette.paper, elevation: 10, shadowColor: palette.ink, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
-    mobileMenuHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-    mobileMenuCaption: { color: palette.muted, fontSize: 8, letterSpacing: 1.1, fontFamily: fontFamilies.semiBold },
+    mobileMenuPanel: { width: '100%', paddingTop: 20, paddingBottom: 24, paddingHorizontal: 20, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, elevation: 12, shadowColor: palette.ink, shadowOpacity: 0.16, shadowRadius: 14, shadowOffset: { width: 0, height: -5 } },
+    mobileMenuHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
+    mobileAccountIdentity: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
     mobileMenuClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: palette.surfaceSubtle },
-    mobileMenuNav: { flexDirection: 'row', gap: 7 },
-    mobileNavButton: { flex: 1, minHeight: 46, justifyContent: 'center', gap: 6, paddingHorizontal: 6, marginBottom: 0 },
-    mobileNavText: { flex: 0, fontSize: 9, textAlign: 'center' },
-    mobileNavIndicator: { width: undefined, height: 3, right: 9, bottom: 0, left: 9, borderRadius: 2 },
-    mobileMenuAccount: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 13, paddingTop: 12, borderTopWidth: 1, borderTopColor: palette.line },
+    mobileMenuActions: { gap: 6, borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 10 },
+    mobileMenuAction: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 10, borderRadius: 10 },
+    mobileSignOut: { backgroundColor: palette.dangerSoft },
+    mobileSignOutText: { color: palette.danger, fontSize: 10, fontFamily: fontFamilies.semiBold },
     mobileMenuProfile: { flex: 1 },
     mobileMenuEmail: { color: palette.muted, fontSize: 8, fontFamily: fontFamilies.regular, marginTop: 2 },
-    mobileMenuLogout: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.surfaceSubtle },
+    settingsBackdrop: { flex: 1, justifyContent: 'center', padding: 18, backgroundColor: palette.overlay },
+    settingsScroll: { flexGrow: 1, justifyContent: 'center' },
+    settingsCard: { width: '100%', maxWidth: 560, alignSelf: 'center', padding: 22, borderWidth: 1, borderColor: palette.line, borderRadius: 20, backgroundColor: palette.paper },
+    settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 22 },
+    settingsTitleGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
+    settingsTitleIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: palette.orangeSoft },
+    settingsTitle: { color: palette.ink, fontSize: 16, fontFamily: fontFamilies.semiBold },
+    settingsSubtitle: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.regular, marginTop: 3 },
+    settingsClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: palette.surfaceSubtle },
+    settingsSection: { gap: 8, marginBottom: 18 },
+    settingsLabel: { color: palette.muted, fontSize: 8, letterSpacing: 0.8, fontFamily: fontFamilies.semiBold },
+    settingsDescription: { color: palette.muted, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.regular, marginBottom: 4 },
+    settingsLoading: { minHeight: 140, justifyContent: 'center', alignItems: 'center' },
+    currencyOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    currencyOption: { width: '46%', minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, borderWidth: 1, borderColor: palette.line, borderRadius: 10, backgroundColor: palette.paper },
+    currencyOptionSelected: { borderColor: palette.pumpkinOrange, backgroundColor: palette.accentSoft },
+    currencyOptionDisabled: { opacity: 0.55 },
+    currencyCode: { color: palette.ink, fontSize: 10, fontFamily: fontFamilies.semiBold },
+    currencyCodeSelected: { color: palette.dirtyOrange },
+    currencyLabel: { flex: 1, color: palette.muted, fontSize: 8, fontFamily: fontFamilies.regular },
+    currencyPreview: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium, marginTop: 6 },
+    sessionDurationOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    sessionDurationOption: { width: '46%', minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: palette.line, borderRadius: 10, backgroundColor: palette.paper },
+    sessionDurationOptionSelected: { borderColor: palette.pumpkinOrange, backgroundColor: palette.accentSoft },
+    sessionDurationLabel: { color: palette.muted, fontSize: 9, fontFamily: fontFamilies.medium },
+    sessionDurationLabelSelected: { color: palette.dirtyOrange, fontFamily: fontFamilies.semiBold },
+    customSessionField: { gap: 6, marginTop: 5 },
+    customSessionLabel: { color: palette.ink, fontSize: 9, fontFamily: fontFamilies.medium },
+    customSessionInput: { height: 42, paddingHorizontal: 11, borderWidth: 1, borderColor: palette.line, borderRadius: 10, backgroundColor: palette.paper, color: palette.ink, fontSize: 10, fontFamily: fontFamilies.regular },
+    customSessionHint: { color: palette.muted, fontSize: 8, lineHeight: 13, fontFamily: fontFamilies.regular },
+    sessionWarning: { color: palette.dirtyOrange, fontSize: 9, lineHeight: 14, fontFamily: fontFamilies.medium, marginTop: 4 },
+    settingsErrorRow: { gap: 8, marginTop: 6 },
+    settingsError: { color: palette.danger, fontSize: 10, fontFamily: fontFamilies.medium },
+    settingsRetry: { color: palette.dirtyOrange, fontSize: 10, fontFamily: fontFamilies.semiBold },
+    settingsActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 9, marginTop: 22 },
+    settingsCancel: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: palette.line },
+    settingsCancelText: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.medium },
+    settingsSave: { minHeight: 40, minWidth: 112, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 14, borderRadius: 10, backgroundColor: palette.pumpkinOrange },
+    settingsSaveDisabled: { opacity: 0.5 },
+    settingsSaveText: { color: '#fff', fontSize: 10, fontFamily: fontFamilies.semiBold },
     gatePage: { flex: 1, backgroundColor: palette.background },
     gateScroll: { flexGrow: 1, justifyContent: 'center', padding: 20 },
     gateCard: { width: '100%', maxWidth: 500, alignSelf: 'center', padding: 25, borderWidth: 1, borderColor: palette.line, borderRadius: 22, backgroundColor: palette.paper },

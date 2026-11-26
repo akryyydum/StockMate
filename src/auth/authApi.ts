@@ -1,3 +1,5 @@
+import type { CurrencyCode } from '../utils/currency';
+
 export type User = {
   id: string;
   name: string;
@@ -88,6 +90,11 @@ export type AuthSession = {
   user: User;
 };
 
+export type AccountSettings = {
+  currency: CurrencyCode;
+  sessionDurationMinutes: number | null;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -159,6 +166,20 @@ export const authApi = {
     return request<void>('/auth/logout', {
       method: 'POST',
       body: JSON.stringify({ refreshToken }),
+    });
+  },
+
+  settings(accessToken: string) {
+    return request<AccountSettings>('/settings', {
+      headers: { Authorization: 'Bearer ' + accessToken },
+    });
+  },
+
+  updateSettings(accessToken: string, settings: AccountSettings) {
+    return request<AccountSettings>('/settings', {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + accessToken },
+      body: JSON.stringify(settings),
     });
   },
 
