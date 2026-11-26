@@ -46,6 +46,7 @@ export function Dashboard({ accessToken }: Props) {
   const { palette } = useAppTheme();
   const { width } = useWindowDimensions();
   const isNarrow = width < 600;
+  const metricBasis = width >= 1250 ? '15%' : width >= 760 ? '30%' : '47%';
   const styles = createStyles(palette);
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,12 +134,12 @@ export function Dashboard({ accessToken }: Props) {
       {summary ? (
         <>
           <View style={styles.metrics}>
-            <Metric label="Stock value" value={currency.format(summary.stockValue)} hint="Current value at cost" accent="orange" icon={DollarSign} />
-            <Metric label="Total items" value={String(summary.totalItems)} hint={`${summary.newItemsThisWeek} added this week`} accent="yellow" icon={Package} />
-            <Metric label="Low stock" value={String(summary.lowStockItems)} hint={`${summary.outOfStockItems} currently out of stock`} accent="warning" icon={CircleAlert} />
-            <Metric label="Stock movements today" value={String(summary.movementsToday)} hint={`${summary.stockInsToday} in · ${summary.stockOutsToday} out`} accent="neutral" icon={ArrowDownUp} />
-            <Metric label="In stock" value={String(summary.inStockItems)} hint={`${total ? Math.round((summary.inStockItems / total) * 100) : 0}% of tracked items`} accent="yellow" icon={PackageCheck} />
-            <Metric label="Team accounts" value={String(summary.activeUsers)} hint="Accounts with inventory access" accent="neutral" icon={UsersRound} />
+            <Metric basis={metricBasis} label="Stock value" value={currency.format(summary.stockValue)} hint="Current value at cost" accent="orange" icon={DollarSign} />
+            <Metric basis={metricBasis} label="Total items" value={String(summary.totalItems)} hint={`${summary.newItemsThisWeek} added this week`} accent="yellow" icon={Package} />
+            <Metric basis={metricBasis} label="Low stock" value={String(summary.lowStockItems)} hint={`${summary.outOfStockItems} currently out of stock`} accent="warning" icon={CircleAlert} />
+            <Metric basis={metricBasis} label="Stock movements today" value={String(summary.movementsToday)} hint={`${summary.stockInsToday} in · ${summary.stockOutsToday} out`} accent="neutral" icon={ArrowDownUp} />
+            <Metric basis={metricBasis} label="In stock" value={String(summary.inStockItems)} hint={`${total ? Math.round((summary.inStockItems / total) * 100) : 0}% of tracked items`} accent="yellow" icon={PackageCheck} />
+            <Metric basis={metricBasis} label="Team accounts" value={String(summary.activeUsers)} hint="Accounts with inventory access" accent="neutral" icon={UsersRound} />
           </View>
 
           <View style={styles.movementCard}>
@@ -356,12 +357,14 @@ function LegendItem({ label, color }: { label: string; color: string }) {
 }
 
 function Metric({
+  basis,
   label,
   value,
   hint,
   accent,
   icon: Icon,
 }: {
+  basis: string;
   label: string;
   value: string;
   hint: string;
@@ -371,7 +374,7 @@ function Metric({
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
   return (
-    <View style={styles.metricCard}>
+    <View style={[styles.metricCard, { flexBasis: basis }]}>
       <View style={styles.metricTop}>
         <Text style={styles.metricLabel}>{label}</Text>
         <View style={[styles.metricIcon, styles[`accent_${accent}`]]}>
@@ -510,7 +513,7 @@ function createStyles(palette: ThemeColors) {
     loading: { minHeight: 150, justifyContent: 'center', alignItems: 'center', gap: 10 },
     hint: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.regular },
     metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    metricCard: { flexGrow: 1, flexBasis: '47%', minWidth: 0, minHeight: 128, overflow: 'hidden', padding: 16, borderRadius: 17, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+    metricCard: { flexGrow: 1, minWidth: 0, minHeight: 128, overflow: 'hidden', padding: 16, borderRadius: 17, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
     metricTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 34 },
     metricIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
     accent_orange: { backgroundColor: palette.pumpkinOrange },

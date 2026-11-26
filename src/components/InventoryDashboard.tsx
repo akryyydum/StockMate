@@ -6,10 +6,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import ArrowDownUp from 'lucide-react-native/icons/arrow-down-up';
+import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import CircleAlert from 'lucide-react-native/icons/circle-alert';
 import Coffee from 'lucide-react-native/icons/coffee';
 import DollarSign from 'lucide-react-native/icons/dollar-sign';
@@ -43,11 +45,27 @@ type MovementForm = { item: InventoryItem; type: 'in' | 'out' } | null;
 const EMPTY_FORM: ItemForm = {
   name: '',
   category: 'Coffee',
-  unit: 'kg',
+  unit: '',
   quantity: '0',
   minimumStock: '1',
   unitCost: '0',
 };
+
+const UNIT_OPTIONS = [
+  'kg',
+  'g',
+  'lb',
+  'oz',
+  'L',
+  'mL',
+  'pcs',
+  'box',
+  'bag',
+  'bottle',
+  'can',
+  'pack',
+  'jar',
+];
 
 const STATUS_LABELS: Record<StatusFilter, string> = {
   all: 'All statuses',
@@ -64,6 +82,8 @@ const currency = new Intl.NumberFormat('en-PH', {
 
 export function InventoryDashboard({ accessToken }: Props) {
   const { palette } = useAppTheme();
+  const { width } = useWindowDimensions();
+  const metricBasis = width >= 980 ? '22%' : width >= 600 ? '30%' : '47%';
   const styles = createStyles(palette);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [summary, setSummary] = useState({
@@ -80,6 +100,7 @@ export function InventoryDashboard({ accessToken }: Props) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [itemModal, setItemModal] = useState(false);
+  const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [form, setForm] = useState<ItemForm>(EMPTY_FORM);
   const [movement, setMovement] = useState<MovementForm>(null);
@@ -124,12 +145,14 @@ export function InventoryDashboard({ accessToken }: Props) {
   function openCreateItem() {
     setEditingItem(null);
     setForm(EMPTY_FORM);
+    setUnitDropdownOpen(false);
     setError(null);
     setItemModal(true);
   }
 
   function openEditItem(item: InventoryItem) {
     setEditingItem(item);
+    setUnitDropdownOpen(false);
     setForm({
       name: item.name,
       category: item.category,
@@ -159,7 +182,7 @@ export function InventoryDashboard({ accessToken }: Props) {
       !Number.isFinite(unitCost) ||
       unitCost < 0
     ) {
-      setError('Enter an item name, category, unit, and valid non-negative quantities and cost.');
+      setError('Enter an item name, category, select a unit, and provide valid non-negative quantities and cost.');
       return;
     }
 
@@ -249,6 +272,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           detail="Current inventory at cost"
           icon={DollarSign}
           accent="dirty"
+          basis={metricBasis}
         />
         <MetricCard
           label="Low stock items"
@@ -256,6 +280,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           detail={summary.outOfStockItems ? `${summary.outOfStockItems} out of stock` : 'At or below minimum'}
           icon={CircleAlert}
           accent="yellow"
+          basis={metricBasis}
         />
         <MetricCard
           label="Total items"
@@ -263,6 +288,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           detail={`${Math.max(0, summary.totalItems - summary.outOfStockItems)} with stock on hand`}
           icon={Package}
           accent="orange"
+          basis={metricBasis}
         />
         <MetricCard
           label="Movements today"
@@ -270,6 +296,7 @@ export function InventoryDashboard({ accessToken }: Props) {
           detail="Stock ins and outs"
           icon={ArrowDownUp}
           accent="ink"
+          basis={metricBasis}
         />
       </View>
 
@@ -414,7 +441,47 @@ export function InventoryDashboard({ accessToken }: Props) {
                   <Field label="Item name *" value={form.name} onChangeText={(name) => setForm({ ...form, name })} placeholder="e.g. Oat milk" />
                   <View style={styles.fieldPair}>
                     <Field label="Category" value={form.category} onChangeText={(category) => setForm({ ...form, category })} placeholder="Coffee" />
-                    <Field label="Unit *" value={form.unit} onChangeText={(unit) => setForm({ ...form, unit })} placeholder="kg" />
+                    <View style={styles.modalField}>
+                      <Text style={styles.modalFieldLabel}>Unit *</Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Choose unit"
+                        accessibilityState={{ expanded: unitDropdownOpen }}
+                        onPress={() => setUnitDropdownOpen((open) => !open)}
+                        style={({ pressed }) => [styles.unitSelector, pressed && styles.smallButtonPressed]}
+                      >
+                        <Text style={[styles.unitSelectorText, !form.unit && styles.unitPlaceholder]}>
+                          {form.unit || 'Select a unit'}
+                        </Text>
+                        <ChevronDown size={16} color={palette.muted} strokeWidth={1.9} />
+                      </Pressable>
+                      {unitDropdownOpen ? (
+                        <View style={styles.unitOptions}>
+                          {[...new Set([
+                            ...UNIT_OPTIONS,
+                            ...(form.unit && !UNIT_OPTIONS.includes(form.unit) ? [form.unit] : []),
+                          ])].map((unit) => {
+                            const selected = form.unit === unit;
+                            return (
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityState={{ selected }}
+                                key={unit}
+                                onPress={() => {
+                                  setForm((current) => ({ ...current, unit }));
+                                  setUnitDropdownOpen(false);
+                                }}
+                                style={[styles.unitOption, selected && styles.unitOptionSelected]}
+                              >
+                                <Text style={[styles.unitOptionText, selected && styles.unitOptionTextSelected]}>
+                                  {unit}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                   <View style={styles.fieldPair}>
                     <Field label="Quantity on hand *" value={form.quantity} onChangeText={(quantity) => setForm({ ...form, quantity })} keyboardType="decimal-pad" />
@@ -430,6 +497,7 @@ export function InventoryDashboard({ accessToken }: Props) {
                   label="Cancel"
                   onPress={() => {
                     setItemModal(false);
+                    setUnitDropdownOpen(false);
                     setMovement(null);
                     setError(null);
                   }}
@@ -465,12 +533,14 @@ function formatQuantity(quantity: number) {
 }
 
 function MetricCard({
+  basis,
   label,
   value,
   detail,
   icon: Icon,
   accent,
 }: {
+  basis: string;
   label: string;
   value: string;
   detail: string;
@@ -480,7 +550,7 @@ function MetricCard({
   const { palette } = useAppTheme();
   const styles = createStyles(palette);
   return (
-    <View style={styles.metricCard}>
+    <View style={[styles.metricCard, { flexBasis: basis }]}>
       <View style={styles.metricTop}>
         <Text style={styles.metricLabel}>{label}</Text>
         <View style={[styles.metricIcon, styles[`metricIcon_${accent}`]]}>
@@ -649,7 +719,6 @@ function createStyles(palette: ThemeColors) {
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   metricCard: {
     flexGrow: 1,
-    flexBasis: '47%',
     minWidth: 0,
     padding: 16,
     borderRadius: 16,
@@ -715,9 +784,17 @@ function createStyles(palette: ThemeColors) {
   modalCard: { width: '100%', maxWidth: 520, alignSelf: 'center', padding: 22, borderRadius: 20, backgroundColor: palette.paper },
   modalTitle: { color: palette.ink, fontSize: 19, fontFamily: fontFamilies.bold },
   modalSubtitle: { color: palette.muted, fontSize: 10, lineHeight: 16, fontFamily: fontFamilies.regular, marginTop: 4, marginBottom: 18 },
-  modalField: { flex: 1, marginBottom: 12 },
+  modalField: { flex: 1, minWidth: 0, marginBottom: 12 },
   modalFieldLabel: { color: palette.ink, fontSize: 9, fontFamily: fontFamilies.semiBold, marginBottom: 6 },
   modalInput: { minHeight: 43, borderWidth: 1, borderColor: palette.line, borderRadius: 10, paddingHorizontal: 11, color: palette.ink, backgroundColor: palette.paper, fontSize: 11, fontFamily: fontFamilies.regular },
+  unitSelector: { minHeight: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderWidth: 1, borderColor: palette.line, borderRadius: 10, paddingHorizontal: 11, backgroundColor: palette.paper },
+  unitSelectorText: { color: palette.ink, fontSize: 11, fontFamily: fontFamilies.regular },
+  unitPlaceholder: { color: palette.muted },
+  unitOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 7, padding: 8, borderWidth: 1, borderColor: palette.line, borderRadius: 10, backgroundColor: palette.surfaceSubtle },
+  unitOption: { minWidth: 48, minHeight: 32, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9, borderRadius: 8, backgroundColor: palette.paper },
+  unitOptionSelected: { backgroundColor: palette.accentSoft, borderWidth: 1, borderColor: palette.pumpkinOrange },
+  unitOptionText: { color: palette.muted, fontSize: 10, fontFamily: fontFamilies.medium },
+  unitOptionTextSelected: { color: palette.dirtyOrange, fontFamily: fontFamilies.semiBold },
   fieldPair: { flexDirection: 'row', gap: 10 },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 8 },
   feedback: { color: palette.dirtyOrange, fontSize: 10, fontFamily: fontFamilies.medium, marginBottom: 10 },

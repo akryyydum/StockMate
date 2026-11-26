@@ -16,7 +16,7 @@ import { User } from './models/User.js';
 
 const app = express();
 const ACCESS_TOKEN_TTL = '15m';
-const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const PASSWORD_HASH_ROUNDS = 12;
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:8081,http://localhost:8082,http://localhost:19006')
@@ -165,20 +165,20 @@ function hashRefreshToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-async function createRefreshToken(userId) {
+async function createRefreshToken(userId, expiresAt) {
   const token = crypto.randomBytes(48).toString('base64url');
   await RefreshToken.create({
     userId,
     tokenHash: hashRefreshToken(token),
-    expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+    expiresAt,
   });
   return token;
 }
 
-async function createSession(user) {
+async function createSession(user, expiresAt = new Date(Date.now() + SESSION_TTL_MS)) {
   const [accessToken, refreshToken] = await Promise.all([
     Promise.resolve(createAccessToken(user)),
-    createRefreshToken(user.id),
+    createRefreshToken(user.id, expiresAt),
   ]);
   return {
     accessToken,
@@ -316,7 +316,7 @@ app.post('/api/auth/refresh', async (req, res) => {
     res.status(401).json({ message: 'Your session has expired. Please sign in again.' });
     return;
   }
-  res.json(await createSession(user));
+  res.json(await createSession(user, oldToken.expiresAt));
 });
 
 app.post('/api/auth/logout', async (req, res) => {

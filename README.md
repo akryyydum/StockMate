@@ -70,7 +70,7 @@ Deploy the generated `dist/` directory to a static host over HTTPS. On supported
 - Users, inventory items, stock movements, and activity records carry an account owner ID. API reads, updates, deletes, dashboard aggregates, and related record creation are scoped to the authenticated user's account, so changing a request ID cannot cross account boundaries.
 - On startup, records from older installations that do not yet have an account owner are assigned to the oldest existing Super Admin's account. Existing Super Admin users are assigned their own account; their legacy shared records remain with the oldest Super Admin.
 - Passwords are validated by the API, hashed with bcrypt, and password hashes are never returned.
-- Access JWTs expire after 15 minutes. Random 30-day refresh tokens are stored as SHA-256 hashes in MongoDB, rotated on refresh, and removed on logout. MongoDB expires old refresh-token records with a TTL index.
+- Access JWTs expire after 15 minutes. Refresh tokens are stored as SHA-256 hashes in MongoDB and rotated on refresh, but retain the original absolute expiry: a session ends two hours after registration, sign-in, or credential update. Tokens are removed on logout, and MongoDB expires old refresh-token records with a TTL index.
 - On Android, the refresh token is stored using Expo SecureStore (Android Keystore-backed). On web, tokens stay in memory and are not persisted across a page reload.
 - Authentication endpoints have an IP-based rate limit. Helmet security headers, explicit CORS origins, a 10 KB JSON body limit, and server-side Zod validation are enabled.
 - Provide a strong `JWT_ACCESS_SECRET`, use HTTPS in production, and keep `.env` files out of source control.
